@@ -13,6 +13,14 @@
 wget -O /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-xray-dual-auto.sh && chmod +x /root/install-xray-dual-auto.sh && /root/install-xray-dual-auto.sh
 ```
 
+## 一键卸载命令
+
+直接复制执行：
+
+```sh
+wget -O /root/uninstall-xray-dual.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-xray-dual.sh && chmod +x /root/uninstall-xray-dual.sh && /root/uninstall-xray-dual.sh
+```
+
 脚本会自动完成下面这些事：
 
 - 先安装依赖
@@ -70,6 +78,16 @@ wget -O /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/youko-
 - 配置文件：`/usr/local/etc/xray/config.json`
 - Xray 程序：`/usr/local/bin/xray`
 - 无服务管理器时的启动脚本：`/root/start-xray.sh`
+
+## 卸载会删除的内容
+
+- `/usr/local/bin/xray`
+- `/usr/local/etc/xray`
+- `/root/start-xray.sh`
+- `/var/log/xray.log`
+- `/var/log/xray-access.log`
+- `/var/log/xray-error.log`
+- `systemd` 或 `OpenRC` 中的 `xray` 服务定义
 
 ## 说明
 
