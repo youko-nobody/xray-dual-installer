@@ -75,3 +75,9 @@ wget -O /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/youko-
 
 - Reality 使用非 `443` 端口时，在某些网络环境下稳定性可能会差一些。
 - 这份脚本里的 WS 使用的是 `security=none`。
+
+## 使用提醒
+
+- 本项目仅供学习、测试和自用。
+- 使用前请确认符合你所在地区的法律法规。
+- 使用前请确认符合 VPS 服务商、网络运营商和相关平台的服务条款。
