@@ -56,7 +56,7 @@ random_port() {
 prompt_port() {
   LABEL="$1"
   DEFAULT_VALUE="$2"
-  printf '%s [default: %s]: ' "$LABEL" "$DEFAULT_VALUE"
+  printf '%s [default: %s]: ' "$LABEL" "$DEFAULT_VALUE" >&2
   read -r INPUT_VALUE
   if [ -n "$INPUT_VALUE" ]; then
     printf '%s' "$INPUT_VALUE"
