@@ -4,6 +4,13 @@ set -e
 SNI="www.sony.com"
 WS_PATH="/ws"
 
+require_root() {
+  if [ "$(id -u)" != "0" ]; then
+    echo "Please run this script as root"
+    exit 1
+  fi
+}
+
 install_deps() {
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
@@ -17,11 +24,23 @@ install_deps() {
   fi
 }
 
+fetch_url() {
+  URL="$1"
+  if command -v wget >/dev/null 2>&1; then
+    wget -qO- "$URL"
+  elif command -v curl >/dev/null 2>&1; then
+    curl -fsL "$URL"
+  else
+    return 1
+  fi
+}
+
 detect_ip() {
-  IP="$(wget -qO- https://api.ipify.org || true)"
-  [ -n "$IP" ] || IP="$(wget -qO- https://ifconfig.me || true)"
-  [ -n "$IP" ] || IP="$(wget -qO- https://ip.sb || true)"
-  [ -n "$IP" ] || IP="$(wget -qO- https://icanhazip.com || true)"
+  IP="$(fetch_url https://api.ipify.org || true)"
+  [ -n "$IP" ] || IP="$(fetch_url https://ifconfig.me/ip || true)"
+  [ -n "$IP" ] || IP="$(fetch_url https://ip.sb || true)"
+  [ -n "$IP" ] || IP="$(fetch_url https://icanhazip.com || true)"
+  IP="$(printf '%s' "$IP" | tr -d '\r\n')"
   [ -n "$IP" ] || {
     echo "Failed to detect public IP"
     exit 1
@@ -42,27 +61,79 @@ detect_xray_zip() {
   esac
 }
 
+is_port_in_use() {
+  PORT_TO_CHECK="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "(^|:)$PORT_TO_CHECK$"
+    return $?
+  fi
+
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "(^|:)$PORT_TO_CHECK$"
+    return $?
+  fi
+
+  return 1
+}
+
 random_port() {
   while :; do
-    CANDIDATE="$(awk 'BEGIN{srand(); print int(20000 + rand() * 30000)}')"
-    if ! ss -lnt "( sport = :$CANDIDATE )" 2>/dev/null | grep -q ":$CANDIDATE"; then
+    if [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
+      RANDOM_NUM="$(od -An -N2 -tu2 /dev/urandom 2>/dev/null | tr -d ' ')"
+      CANDIDATE="$((20000 + (RANDOM_NUM % 30000)))"
+    else
+      CANDIDATE="$(awk 'BEGIN{srand(); print int(20000 + rand() * 30000)}')"
+    fi
+
+    if ! is_port_in_use "$CANDIDATE"; then
       printf '%s' "$CANDIDATE"
       return
     fi
-    sleep 1
   done
+}
+
+is_valid_port() {
+  VALUE="$1"
+  case "$VALUE" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+  esac
+
+  if [ "$VALUE" -lt 1 ] || [ "$VALUE" -gt 65535 ]; then
+    return 1
+  fi
+
+  return 0
 }
 
 prompt_port() {
   LABEL="$1"
   DEFAULT_VALUE="$2"
-  printf '%s [default: %s]: ' "$LABEL" "$DEFAULT_VALUE" >&2
-  read -r INPUT_VALUE
-  if [ -n "$INPUT_VALUE" ]; then
-    printf '%s' "$INPUT_VALUE"
-  else
-    printf '%s' "$DEFAULT_VALUE"
-  fi
+  while :; do
+    if [ -t 0 ] && [ -r /dev/tty ]; then
+      printf '%s [default: %s]: ' "$LABEL" "$DEFAULT_VALUE" >/dev/tty
+      read -r INPUT_VALUE </dev/tty || INPUT_VALUE=""
+    else
+      INPUT_VALUE=""
+    fi
+
+    if [ -z "$INPUT_VALUE" ]; then
+      printf '%s' "$DEFAULT_VALUE"
+      return
+    fi
+
+    if is_valid_port "$INPUT_VALUE"; then
+      if is_port_in_use "$INPUT_VALUE"; then
+        echo "Port already in use: $INPUT_VALUE" >&2
+        continue
+      fi
+      printf '%s' "$INPUT_VALUE"
+      return
+    fi
+
+    echo "Invalid port: $INPUT_VALUE" >&2
+  done
 }
 
 write_systemd_service() {
@@ -132,6 +203,7 @@ show_status() {
     netstat -tunlp | grep -E ":${REALITY_PORT}|:${WS_PORT}" || true
 }
 
+require_root
 install_deps
 
 PUBLIC_IP="$(detect_ip)"
@@ -147,6 +219,26 @@ echo "Detected public IP: $PUBLIC_IP"
 REALITY_PORT="$(prompt_port "Reality port" "$DEFAULT_REALITY_PORT")"
 WS_PORT="$(prompt_port "WS port" "$DEFAULT_WS_PORT")"
 
+if ! is_valid_port "$REALITY_PORT"; then
+  echo "Invalid Reality port: $REALITY_PORT"
+  exit 1
+fi
+
+if ! is_valid_port "$WS_PORT"; then
+  echo "Invalid WS port: $WS_PORT"
+  exit 1
+fi
+
+if is_port_in_use "$REALITY_PORT"; then
+  echo "Reality port is already in use: $REALITY_PORT"
+  exit 1
+fi
+
+if is_port_in_use "$WS_PORT"; then
+  echo "WS port is already in use: $WS_PORT"
+  exit 1
+fi
+
 if [ "$REALITY_PORT" = "$WS_PORT" ]; then
   echo "Reality port and WS port cannot be the same"
   exit 1
@@ -158,6 +250,7 @@ wget -O xray.zip "https://github.com/XTLS/Xray-core/releases/latest/download/${X
 unzip -o xray.zip
 install -m 755 xray /usr/local/bin/xray
 mkdir -p /usr/local/etc/xray
+touch /var/log/xray-access.log /var/log/xray-error.log
 
 REALITY_UUID="$(/usr/local/bin/xray uuid)"
 WS_UUID="$(/usr/local/bin/xray uuid)"
