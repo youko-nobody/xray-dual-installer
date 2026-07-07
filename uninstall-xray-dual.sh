@@ -31,8 +31,8 @@ rm -f /var/log/xray.log
 rm -f /var/log/xray-access.log
 rm -f /var/log/xray-error.log
 
-echo "Xray dual node has been removed."
-echo "Removed files:"
+echo "Xray 双节点已卸载。"
+echo "已删除以下文件："
 echo "- /usr/local/bin/xray"
 echo "- /usr/local/etc/xray"
 echo "- /root/start-xray.sh"

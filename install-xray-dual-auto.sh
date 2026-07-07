@@ -6,7 +6,7 @@ WS_PATH="/ws"
 
 require_root() {
   if [ "$(id -u)" != "0" ]; then
-    echo "Please run this script as root"
+    echo "请使用 root 用户运行此脚本"
     exit 1
   fi
 }
@@ -19,7 +19,7 @@ install_deps() {
     apk update
     apk add curl wget unzip openssl ca-certificates net-tools procps
   else
-    echo "Unsupported system: no apt-get or apk found"
+    echo "不支持的系统：未找到 apt-get 或 apk"
     exit 1
   fi
 }
@@ -42,7 +42,7 @@ detect_ip() {
   [ -n "$IP" ] || IP="$(fetch_url https://icanhazip.com || true)"
   IP="$(printf '%s' "$IP" | tr -d '\r\n')"
   [ -n "$IP" ] || {
-    echo "Failed to detect public IP"
+    echo "获取公网 IP 失败"
     exit 1
   }
   printf '%s' "$IP"
@@ -55,7 +55,7 @@ detect_xray_zip() {
     aarch64|arm64) printf '%s' "Xray-linux-arm64-v8a.zip" ;;
     armv7l) printf '%s' "Xray-linux-arm32-v7a.zip" ;;
     *)
-      echo "Unsupported architecture: $ARCH"
+      echo "不支持的系统架构：$ARCH"
       exit 1
       ;;
   esac
@@ -112,7 +112,7 @@ prompt_port() {
   DEFAULT_VALUE="$2"
   while :; do
     if [ -t 0 ] && [ -r /dev/tty ]; then
-      printf '%s [default: %s]: ' "$LABEL" "$DEFAULT_VALUE" >/dev/tty
+      printf '%s [默认: %s]: ' "$LABEL" "$DEFAULT_VALUE" >/dev/tty
       read -r INPUT_VALUE </dev/tty || INPUT_VALUE=""
     else
       INPUT_VALUE=""
@@ -125,14 +125,14 @@ prompt_port() {
 
     if is_valid_port "$INPUT_VALUE"; then
       if is_port_in_use "$INPUT_VALUE"; then
-        echo "Port already in use: $INPUT_VALUE" >&2
+        echo "端口已被占用：$INPUT_VALUE" >&2
         continue
       fi
       printf '%s' "$INPUT_VALUE"
       return
     fi
 
-    echo "Invalid port: $INPUT_VALUE" >&2
+    echo "端口无效：$INPUT_VALUE" >&2
   done
 }
 
@@ -215,32 +215,32 @@ while [ "$DEFAULT_WS_PORT" = "$DEFAULT_REALITY_PORT" ]; do
   DEFAULT_WS_PORT="$(random_port)"
 done
 
-echo "Detected public IP: $PUBLIC_IP"
-REALITY_PORT="$(prompt_port "Reality port" "$DEFAULT_REALITY_PORT")"
-WS_PORT="$(prompt_port "WS port" "$DEFAULT_WS_PORT")"
+echo "检测到公网 IP：$PUBLIC_IP"
+REALITY_PORT="$(prompt_port "Reality 端口" "$DEFAULT_REALITY_PORT")"
+WS_PORT="$(prompt_port "WS 端口" "$DEFAULT_WS_PORT")"
 
 if ! is_valid_port "$REALITY_PORT"; then
-  echo "Invalid Reality port: $REALITY_PORT"
+  echo "Reality 端口无效：$REALITY_PORT"
   exit 1
 fi
 
 if ! is_valid_port "$WS_PORT"; then
-  echo "Invalid WS port: $WS_PORT"
+  echo "WS 端口无效：$WS_PORT"
   exit 1
 fi
 
 if is_port_in_use "$REALITY_PORT"; then
-  echo "Reality port is already in use: $REALITY_PORT"
+  echo "Reality 端口已被占用：$REALITY_PORT"
   exit 1
 fi
 
 if is_port_in_use "$WS_PORT"; then
-  echo "WS port is already in use: $WS_PORT"
+  echo "WS 端口已被占用：$WS_PORT"
   exit 1
 fi
 
 if [ "$REALITY_PORT" = "$WS_PORT" ]; then
-  echo "Reality port and WS port cannot be the same"
+  echo "Reality 端口和 WS 端口不能相同"
   exit 1
 fi
 
@@ -346,16 +346,16 @@ else
 fi
 
 echo
-echo "===== Public IP ====="
+echo "===== 公网 IP ====="
 echo "$PUBLIC_IP"
 echo
-echo "===== Reality ====="
-echo "Port: $REALITY_PORT"
+echo "===== Reality 节点 ====="
+echo "端口：$REALITY_PORT"
 echo "vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}"
 echo
-echo "===== WS ====="
-echo "Port: $WS_PORT"
+echo "===== WS 节点 ====="
+echo "端口：$WS_PORT"
 echo "vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}"
 echo
-echo "===== Status ====="
+echo "===== 服务状态 ====="
 show_status
