@@ -1,13 +1,18 @@
-# Xray 双节点一键脚本
+# Xray Dual Installer
 
-这个仓库提供一份一键脚本，用来部署：
+![Shell](https://img.shields.io/badge/Shell-sh-4EAA25)
+![System](https://img.shields.io/badge/System-Debian%20%7C%20Ubuntu%20%7C%20Alpine-blue)
+![Service](https://img.shields.io/badge/Service-systemd%20%7C%20OpenRC-orange)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+一个中文化的 Xray 双节点一键安装脚本，用来快速部署：
 
 - `VLESS + Reality`
 - `VLESS + WS`
 
-适合想快速在 `Debian / Ubuntu / Alpine` 上完成双节点部署的场景。
+脚本会自动安装依赖、获取公网 IP、生成 UUID 和 Reality 密钥、配置开机自启，并且把节点链接保存到本机，后续可以随时查看。
 
-## 一键安装命令
+## 快速安装
 
 直接复制执行：
 
@@ -15,13 +20,35 @@
 wget -O /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-xray-dual-auto.sh && chmod +x /root/install-xray-dual-auto.sh && /root/install-xray-dual-auto.sh
 ```
 
-如果系统里暂时没有 `wget`，也可以用：
+如果系统里没有 `wget`，可以用 `curl`：
 
 ```sh
 curl -L -o /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-xray-dual-auto.sh && chmod +x /root/install-xray-dual-auto.sh && /root/install-xray-dual-auto.sh
 ```
 
-## 一键卸载命令
+## 查看节点信息
+
+安装完成后，如果第一次没有保存输出内容，后续直接执行：
+
+```sh
+/root/install-xray-dual-auto.sh info
+```
+
+节点信息会同时保存到：
+
+```sh
+/usr/local/etc/xray/node-info.txt
+/root/xray-node-info.txt
+```
+
+再次运行安装脚本时，如果检测到已经保存过节点信息，会显示中文菜单：
+
+```text
+1. 查看节点信息
+2. 重新安装 / 覆盖节点
+```
+
+## 一键卸载
 
 直接复制执行：
 
@@ -29,159 +56,108 @@ curl -L -o /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/you
 wget -O /root/uninstall-xray-dual.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-xray-dual.sh && chmod +x /root/uninstall-xray-dual.sh && /root/uninstall-xray-dual.sh
 ```
 
-如果系统里暂时没有 `wget`，也可以用：
+如果系统里没有 `wget`，可以用 `curl`：
 
 ```sh
 curl -L -o /root/uninstall-xray-dual.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-xray-dual.sh && chmod +x /root/uninstall-xray-dual.sh && /root/uninstall-xray-dual.sh
 ```
 
-脚本会自动完成下面这些事：
+## 功能说明
 
-- 先安装依赖
-- 自动识别服务器公网 IPv4
-- 自动识别系统架构
-- 为 `Reality` 和 `WS` 各生成一个推荐随机端口
-- 直接回车时使用推荐端口
-- 自动生成 UUID、Reality 密钥和 Short ID
-- 根据系统自动配置 `systemd` 或 `OpenRC` 开机自启
-- 自动保存节点信息，后续可直接查看
+| 功能 | 说明 |
+| --- | --- |
+| 自动安装依赖 | Debian / Ubuntu 使用 `apt-get`，Alpine 使用 `apk` |
+| 自动获取公网 IP | 从多个公网 IP 接口依次获取 |
+| 自动识别架构 | 支持 `x86_64`、`amd64`、`arm64`、`aarch64`、`armv7l` |
+| 自动生成端口 | 为 Reality 和 WS 分别推荐随机端口 |
+| 支持自定义端口 | 回车使用推荐端口，也可以手动输入端口 |
+| 端口校验 | 检查端口格式，并避免使用已占用端口 |
+| 自动生成密钥 | 自动生成 UUID、Reality X25519 密钥、Short ID |
+| 自动开机自启 | 支持 `systemd` 和 `OpenRC` |
+| 保存节点信息 | 保存节点链接，后续可用 `info` 查看 |
+| 中文提示 | 安装、报错、输出信息均为中文 |
 
 ## 支持系统
 
-- Debian / Ubuntu
+- Debian
+- Ubuntu
 - Alpine
-- 其他带基础命令的精简环境
+- 其他带基础命令的精简 Linux 环境
 
-## 安装前建议
+脚本会优先配置服务管理器：
 
-正式执行前，建议先确认下面几项：
+- Debian / Ubuntu：`systemd`
+- Alpine：`OpenRC`
 
-- 使用 `root` 账号执行脚本
-- VPS 安全组 / 防火墙已放行你要使用的 TCP 端口
-- 机器可以正常访问 GitHub
-- 机器本身还有可用内存和磁盘
-
-如果是特别小的 NAT 机器或极低内存机器，安装依赖时被系统直接 `Killed`，通常不是脚本卡住，而是内存不够。
-
-如果系统里没有 `systemd` 或 `OpenRC`，脚本会回退到：
+如果系统里没有 `systemd` 或 `OpenRC`，脚本会回退到普通后台启动脚本：
 
 ```sh
 /root/start-xray.sh
 ```
 
-## 固定配置
+## 默认配置
 
-- Reality 目标站 / SNI：`www.sony.com`
-- WS 路径：`/ws`
+| 项目 | 默认值 |
+| --- | --- |
+| Reality SNI | `www.sony.com` |
+| Reality 目标站 | `www.sony.com:443` |
+| WS 路径 | `/ws` |
+| WS TLS | 不启用，`security=none` |
+| 日志级别 | `warning` |
 
-## 交互方式
+## 端口建议
 
-执行脚本时，会自动推荐两个随机端口：
-
-- 一个给 Reality
-- 一个给 WS
-
-如果你直接按回车，就使用推荐值；如果你想自定义端口，直接输入新端口即可。
-
-## 需要放行的端口
-
-安装时你最终选择的两个端口都要在防火墙或安全组里放行：
+安装时你最终选择的两个端口都需要放行：
 
 - `Reality 端口 / TCP`
 - `WS 端口 / TCP`
 
-如果是云服务器，还要同时确认：
+如果是云服务器，请同时确认：
 
 - VPS 厂商控制台安全组已放行
 - 系统内防火墙已放行
 
-## 推荐端口说明
+Reality 更推荐使用 `443` 端口。使用非 `443` 端口时，Xray 通常可以正常启动，但在部分网络环境下稳定性可能会差一些。
 
-- `Reality` 更推荐使用 `443`
-- `WS` 可以使用其他常见 TCP 端口，比如 `80`、`8080`、`8880`、`2052`、`2082`、`2086`、`2095`，或你自己的自定义端口
+WS 可以使用常见 TCP 端口，例如：
 
-如果你把 `Reality` 放在非 `443` 端口，Xray 自身通常可以启动，但在部分网络环境下稳定性可能会差一些。
+```text
+80、8080、8880、2052、2082、2086、2095
+```
 
-## 脚本输出内容
+## 常用命令
 
-脚本执行完成后会输出：
-
-- 当前公网 IP
-- Reality 节点链接
-- WS 节点链接
-- 当前服务状态
-
-如果你第一次没有复制，后续可以直接运行：
+### 查看节点信息
 
 ```sh
 /root/install-xray-dual-auto.sh info
 ```
 
-## 相关文件
-
-- 配置文件：`/usr/local/etc/xray/config.json`
-- Xray 程序：`/usr/local/bin/xray`
-- 无服务管理器时的启动脚本：`/root/start-xray.sh`
-
-## 卸载会删除的内容
-
-- `/usr/local/bin/xray`
-- `/usr/local/etc/xray`
-- `/root/start-xray.sh`
-- `/var/log/xray.log`
-- `/var/log/xray-access.log`
-- `/var/log/xray-error.log`
-- `systemd` 或 `OpenRC` 中的 `xray` 服务定义
-
-## 常用命令
-
-### 1. 检查 Xray 是否启动
-
-Debian / Ubuntu：
+### 强制重新安装
 
 ```sh
-systemctl status xray --no-pager
+/root/install-xray-dual-auto.sh install
 ```
 
-Alpine：
+### 测试 Xray 配置
 
 ```sh
-rc-service xray status
+xray run -test -config /usr/local/etc/xray/config.json
 ```
 
-通用检查监听端口：
+### 查看监听端口
 
 ```sh
-ss -tnlp | grep -E ':443|:81|:85'
+ss -tnlp | grep xray
 ```
 
-如果系统里没有 `ss`，也可以用：
+如果没有 `ss`：
 
 ```sh
 netstat -tunlp | grep xray
 ```
 
-### 2. 启动 / 重启 Xray
-
-Debian / Ubuntu：
-
-```sh
-systemctl restart xray
-```
-
-Alpine：
-
-```sh
-rc-service xray restart
-```
-
-如果系统里没有服务管理器，可以手动执行：
-
-```sh
-/root/start-xray.sh
-```
-
-### 3. 查看 Xray 日志
+### 查看日志
 
 访问日志：
 
@@ -195,15 +171,89 @@ tail -f /var/log/xray-access.log
 tail -f /var/log/xray-error.log
 ```
 
-### 4. 测试配置文件是否正确
+## 服务管理
+
+### Debian / Ubuntu
+
+查看状态：
 
 ```sh
-xray run -test -config /usr/local/etc/xray/config.json
+systemctl status xray --no-pager
 ```
 
-## 常见问题排查
+启动：
 
-### 1. 脚本看起来卡住了
+```sh
+systemctl start xray
+```
+
+重启：
+
+```sh
+systemctl restart xray
+```
+
+停止：
+
+```sh
+systemctl stop xray
+```
+
+### Alpine
+
+查看状态：
+
+```sh
+rc-service xray status
+```
+
+启动：
+
+```sh
+rc-service xray start
+```
+
+重启：
+
+```sh
+rc-service xray restart
+```
+
+停止：
+
+```sh
+rc-service xray stop
+```
+
+## 相关文件
+
+| 文件 | 说明 |
+| --- | --- |
+| `/usr/local/bin/xray` | Xray 主程序 |
+| `/usr/local/etc/xray/config.json` | Xray 配置文件 |
+| `/usr/local/etc/xray/node-info.txt` | 节点信息文件 |
+| `/root/xray-node-info.txt` | 节点信息备份 |
+| `/root/install-xray-dual-auto.sh` | 安装脚本 |
+| `/root/uninstall-xray-dual.sh` | 卸载脚本 |
+| `/root/start-xray.sh` | 无服务管理器时的启动脚本 |
+| `/var/log/xray-access.log` | 访问日志 |
+| `/var/log/xray-error.log` | 错误日志 |
+| `/var/log/xray.log` | fallback 后台启动日志 |
+
+## 卸载会删除的内容
+
+- `/usr/local/bin/xray`
+- `/usr/local/etc/xray`
+- `/root/start-xray.sh`
+- `/root/xray-node-info.txt`
+- `/var/log/xray.log`
+- `/var/log/xray-access.log`
+- `/var/log/xray-error.log`
+- `systemd` 或 `OpenRC` 中的 `xray` 服务定义
+
+## 常见问题
+
+### 脚本看起来卡住了
 
 常见原因：
 
@@ -211,11 +261,11 @@ xray run -test -config /usr/local/etc/xray/config.json
 - 机器访问 GitHub 慢
 - 小内存机器安装依赖时被系统杀掉
 
-可以先按一次回车，看看是不是在等端口输入。
+可以先按一次回车，看看是不是在等待端口输入。
 
-### 2. 提示 `curl: not found` 或 `wget: not found`
+### 提示 `curl: not found` 或 `wget: not found`
 
-先手动安装一个下载工具再执行脚本。
+先手动安装一个下载工具。
 
 Debian / Ubuntu：
 
@@ -231,74 +281,72 @@ apk update
 apk add curl wget
 ```
 
-### 3. 提示 `invalid character 'R' looking for beginning of value`
+### 提示 `Killed`
 
-这是旧版本脚本里端口输入污染配置文件导致的问题。重新拉取本仓库最新版脚本后再运行即可。
+一般是机器内存太小，安装依赖或解压时被系统杀掉。可以尝试：
 
-### 4. 提示 `Exec format error`
+- 换内存更大的 VPS
+- 关闭其他占内存的进程
+- 使用更精简的系统环境
 
-这类报错常见于脚本或服务文件换行符不对，尤其是 Windows 编辑后上传到 Alpine / OpenRC 的场景。
+### 提示 `Exec format error`
 
-直接重新从本仓库下载最新版脚本，不要手动复制一段残缺内容。
+常见于脚本或 OpenRC 服务文件换行符不正确，尤其是 Windows 手动复制后再粘贴到 Alpine 的场景。
 
-### 5. `rc-service xray status` 提示 `service 'xray' does not exist`
+建议直接从 GitHub 下载最新版脚本，不要手动复制残缺内容。
 
-这说明 OpenRC 服务文件没有创建成功，或者你之前只是临时手动运行了 `xray run`。
+### 提示 `invalid character 'R' looking for beginning of value`
 
-重新运行最新版安装脚本，脚本会自动写入：
+这是旧版脚本端口输入污染配置文件导致的问题。重新下载最新版脚本后再运行即可。
+
+### `rc-service xray status` 提示 `service 'xray' does not exist`
+
+说明 OpenRC 服务文件没有创建成功，或者之前只是手动运行了 Xray。
+
+重新运行最新版安装脚本即可自动写入：
 
 ```sh
 /etc/init.d/xray
 ```
 
-然后再执行：
+### `xray run -test` 通过，但端口没有监听
 
-```sh
-rc-service xray restart
-rc-service xray status
-```
-
-### 6. `xray run -test` 通过了，但端口没有监听
-
-先检查服务是否真的启动：
+先检查服务是否启动：
 
 ```sh
 ps aux | grep -i xray
 ss -tnlp | grep xray
 ```
 
-如果配置正确但没有监听，优先检查：
+重点检查：
 
-- 服务是否没启动
-- 端口是否被别的程序占用
+- 服务是否真正启动
+- 端口是否被占用
 - 服务管理器是否写入成功
 
-### 7. 可以 `tcping` 通，但客户端延迟显示 `-1`
+### `tcping` 通，但客户端延迟显示 `-1`
 
-通常说明端口通了，但协议握手没有成功。优先检查：
+通常说明端口通了，但协议握手失败。优先检查：
 
-- 节点链接参数是否填错
-- `Reality` 的 `pbk`、`sid`、`sni` 是否和服务端一致
-- `WS` 的 `path` 是否一致
-- 客户端使用的协议类型是否选对
+- 节点链接是否复制完整
+- Reality 的 `pbk`、`sid`、`sni` 是否正确
+- WS 的 `path` 是否是 `/ws`
+- 客户端协议类型是否选对
 
-### 8. 日志文件不存在
+## 项目说明
 
-先确认你运行的是本仓库最新版脚本。当前版本会自动创建：
-
-- `/var/log/xray-access.log`
-- `/var/log/xray-error.log`
-
-如果文件存在但没有内容，说明当前还没有新的连接进入，或者日志级别较低。
-
-## 说明
-
-- Reality 使用非 `443` 端口时，在某些网络环境下稳定性可能会差一些。
-- 这份脚本里的 WS 使用的是 `security=none`。
-- 当前脚本部署的是 `VLESS + WS`，不是 `VLESS + WS + TLS`。
+- 当前脚本部署的是 `VLESS + Reality` 和 `VLESS + WS`。
+- 当前 WS 节点是 `security=none`，不是 `VLESS + WS + TLS`。
+- Reality 使用非 `443` 端口时，部分网络环境下稳定性可能会差一些。
+- 本项目不包含域名、证书、CDN 配置。
 
 ## 使用提醒
 
 - 本项目仅供学习、测试和自用。
 - 使用前请确认符合你所在地区的法律法规。
 - 使用前请确认符合 VPS 服务商、网络运营商和相关平台的服务条款。
+- 请勿将节点信息、UUID、Reality 密钥等敏感信息公开到 Issue、截图或聊天记录中。
+
+## License
+
+本项目使用 [MIT License](LICENSE)。
