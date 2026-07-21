@@ -1,9 +1,10 @@
 # Xray Dual Installer
 
-![Shell](https://img.shields.io/badge/Shell-sh-4EAA25)
-![System](https://img.shields.io/badge/System-Debian%20%7C%20Ubuntu%20%7C%20Alpine-blue)
-![Service](https://img.shields.io/badge/Service-systemd%20%7C%20OpenRC-orange)
-![License](https://img.shields.io/badge/License-MIT-green)
+![Shell](https://img.shields.io/badge/Shell-sh-4EAA25?style=for-the-badge)
+![System](https://img.shields.io/badge/System-Debian%20%7C%20Ubuntu%20%7C%20Alpine-2563eb?style=for-the-badge)
+![Service](https://img.shields.io/badge/Service-systemd%20%7C%20OpenRC-f97316?style=for-the-badge)
+![Language](https://img.shields.io/badge/Prompt-%E4%B8%AD%E6%96%87-e11d48?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-16a34a?style=for-the-badge)
 
 一个中文化的 Xray 双节点一键安装脚本，用来快速部署：
 
@@ -11,6 +12,9 @@
 - `VLESS + WS`
 
 脚本会自动安装依赖、获取公网 IP、生成 UUID 和 Reality 密钥、配置开机自启，并且把节点链接保存到本机，后续可以随时查看。
+
+> [!TIP]
+> 适合想快速部署双节点、并且希望后续能一条命令找回节点信息的自用场景。
 
 ## 快速安装
 
@@ -25,6 +29,9 @@ wget -O /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/youko-
 ```sh
 curl -L -o /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-xray-dual-auto.sh && chmod +x /root/install-xray-dual-auto.sh && /root/install-xray-dual-auto.sh
 ```
+
+> [!IMPORTANT]
+> 请使用 `root` 用户执行脚本。安装完成后，请放行你选择的 Reality 和 WS 两个 TCP 端口。
 
 ## 查看节点信息
 
@@ -47,6 +54,9 @@ curl -L -o /root/install-xray-dual-auto.sh https://raw.githubusercontent.com/you
 1. 查看节点信息
 2. 重新安装 / 覆盖节点
 ```
+
+> [!NOTE]
+> 节点信息只保存在 VPS 本机，不会上传到 GitHub。
 
 ## 一键卸载
 
@@ -117,7 +127,8 @@ curl -L -o /root/uninstall-xray-dual.sh https://raw.githubusercontent.com/youko-
 - VPS 厂商控制台安全组已放行
 - 系统内防火墙已放行
 
-Reality 更推荐使用 `443` 端口。使用非 `443` 端口时，Xray 通常可以正常启动，但在部分网络环境下稳定性可能会差一些。
+> [!IMPORTANT]
+> Reality 更推荐使用 `443` 端口。使用非 `443` 端口时，Xray 通常可以正常启动，但在部分网络环境下稳定性可能会差一些。
 
 WS 可以使用常见 TCP 端口，例如：
 
@@ -293,7 +304,8 @@ apk add curl wget
 
 常见于脚本或 OpenRC 服务文件换行符不正确，尤其是 Windows 手动复制后再粘贴到 Alpine 的场景。
 
-建议直接从 GitHub 下载最新版脚本，不要手动复制残缺内容。
+> [!TIP]
+> 建议直接从 GitHub 下载最新版脚本，不要手动复制残缺内容。
 
 ### 提示 `invalid character 'R' looking for beginning of value`
 
@@ -342,10 +354,12 @@ ss -tnlp | grep xray
 
 ## 使用提醒
 
+> [!WARNING]
+> 请勿将节点信息、UUID、Reality 密钥等敏感信息公开到 Issue、截图或聊天记录中。
+
 - 本项目仅供学习、测试和自用。
 - 使用前请确认符合你所在地区的法律法规。
 - 使用前请确认符合 VPS 服务商、网络运营商和相关平台的服务条款。
-- 请勿将节点信息、UUID、Reality 密钥等敏感信息公开到 Issue、截图或聊天记录中。
 
 ## License
 
