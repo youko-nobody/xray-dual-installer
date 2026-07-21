@@ -5,10 +5,47 @@ SNI="www.sony.com"
 WS_PATH="/ws"
 NODE_INFO_FILE="/usr/local/etc/xray/node-info.txt"
 NODE_INFO_COPY="/root/xray-node-info.txt"
+if [ -t 1 ]; then
+  RED="$(printf '\033[31m')"
+  GREEN="$(printf '\033[32m')"
+  YELLOW="$(printf '\033[33m')"
+  BLUE="$(printf '\033[34m')"
+  CYAN="$(printf '\033[36m')"
+  BOLD="$(printf '\033[1m')"
+  RESET="$(printf '\033[0m')"
+else
+  RED=""
+  GREEN=""
+  YELLOW=""
+  BLUE=""
+  CYAN=""
+  BOLD=""
+  RESET=""
+fi
+
+info() {
+  printf '%b%s%b\n' "$CYAN" "$*" "$RESET"
+}
+
+success() {
+  printf '%b%s%b\n' "$GREEN" "$*" "$RESET"
+}
+
+warn() {
+  printf '%b%s%b\n' "$YELLOW" "$*" "$RESET" >&2
+}
+
+error() {
+  printf '%b%s%b\n' "$RED" "$*" "$RESET" >&2
+}
+
+headline() {
+  printf '%b%s%b\n' "$BOLD$BLUE" "$*" "$RESET"
+}
 
 require_root() {
   if [ "$(id -u)" != "0" ]; then
-    echo "请使用 root 用户运行此脚本"
+    error "请使用 root 用户运行此脚本"
     exit 1
   fi
 }
@@ -24,8 +61,8 @@ show_node_info() {
     return
   fi
 
-  echo "未找到已保存的节点信息。"
-  echo "请先运行安装脚本完成部署。"
+  warn "未找到已保存的节点信息。"
+  warn "请先运行安装脚本完成部署。"
   exit 1
 }
 
@@ -38,9 +75,9 @@ choose_action_if_installed() {
     return
   fi
 
-  echo "检测到已保存的节点信息。"
-  echo "1. 查看节点信息"
-  echo "2. 重新安装 / 覆盖节点"
+  info "检测到已保存的节点信息。"
+  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET"
+  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET"
   printf '请选择 [默认: 1]: ' >/dev/tty
   read -r ACTION </dev/tty || ACTION=""
 
@@ -50,10 +87,10 @@ choose_action_if_installed() {
       exit 0
       ;;
     2)
-      echo "继续重新安装，将生成新的节点信息。"
+      info "继续重新安装，将生成新的节点信息。"
       ;;
     *)
-      echo "无效选择，已取消。"
+      error "无效选择，已取消。"
       exit 1
       ;;
   esac
@@ -67,7 +104,7 @@ install_deps() {
     apk update
     apk add curl wget unzip openssl ca-certificates net-tools procps
   else
-    echo "不支持的系统：未找到 apt-get 或 apk"
+    error "不支持的系统：未找到 apt-get 或 apk"
     exit 1
   fi
 }
@@ -90,7 +127,7 @@ detect_ip() {
   [ -n "$IP" ] || IP="$(fetch_url https://icanhazip.com || true)"
   IP="$(printf '%s' "$IP" | tr -d '\r\n')"
   [ -n "$IP" ] || {
-    echo "获取公网 IP 失败"
+    error "获取公网 IP 失败"
     exit 1
   }
   printf '%s' "$IP"
@@ -103,7 +140,7 @@ detect_xray_zip() {
     aarch64|arm64) printf '%s' "Xray-linux-arm64-v8a.zip" ;;
     armv7l) printf '%s' "Xray-linux-arm32-v7a.zip" ;;
     *)
-      echo "不支持的系统架构：$ARCH"
+      error "不支持的系统架构：$ARCH"
       exit 1
       ;;
   esac
@@ -160,7 +197,7 @@ prompt_port() {
   DEFAULT_VALUE="$2"
   while :; do
     if [ -t 0 ] && [ -r /dev/tty ]; then
-      printf '%s [默认: %s]: ' "$LABEL" "$DEFAULT_VALUE" >/dev/tty
+      printf '%b%s%b [默认: %b%s%b]: ' "$CYAN" "$LABEL" "$RESET" "$GREEN" "$DEFAULT_VALUE" "$RESET" >/dev/tty
       read -r INPUT_VALUE </dev/tty || INPUT_VALUE=""
     else
       INPUT_VALUE=""
@@ -173,14 +210,14 @@ prompt_port() {
 
     if is_valid_port "$INPUT_VALUE"; then
       if is_port_in_use "$INPUT_VALUE"; then
-        echo "端口已被占用：$INPUT_VALUE" >&2
+        warn "端口已被占用：$INPUT_VALUE"
         continue
       fi
       printf '%s' "$INPUT_VALUE"
       return
     fi
 
-    echo "端口无效：$INPUT_VALUE" >&2
+    warn "端口无效：$INPUT_VALUE"
   done
 }
 
@@ -259,10 +296,10 @@ case "${1:-}" in
   install|--install|"")
     ;;
   *)
-    echo "用法："
-    echo "  $0              安装或在已安装时显示菜单"
-    echo "  $0 install      直接安装 / 重装"
-    echo "  $0 info         查看已保存的节点信息"
+    headline "用法："
+    printf '%b\n' "  $0              安装或在已安装时显示菜单"
+    printf '%b\n' "  $0 install      直接安装 / 重装"
+    printf '%b\n' "  $0 info         查看已保存的节点信息"
     exit 1
     ;;
 esac
@@ -283,32 +320,32 @@ while [ "$DEFAULT_WS_PORT" = "$DEFAULT_REALITY_PORT" ]; do
   DEFAULT_WS_PORT="$(random_port)"
 done
 
-echo "检测到公网 IP：$PUBLIC_IP"
+info "检测到公网 IP：$PUBLIC_IP"
 REALITY_PORT="$(prompt_port "Reality 端口" "$DEFAULT_REALITY_PORT")"
 WS_PORT="$(prompt_port "WS 端口" "$DEFAULT_WS_PORT")"
 
 if ! is_valid_port "$REALITY_PORT"; then
-  echo "Reality 端口无效：$REALITY_PORT"
+  error "Reality 端口无效：$REALITY_PORT"
   exit 1
 fi
 
 if ! is_valid_port "$WS_PORT"; then
-  echo "WS 端口无效：$WS_PORT"
+  error "WS 端口无效：$WS_PORT"
   exit 1
 fi
 
 if is_port_in_use "$REALITY_PORT"; then
-  echo "Reality 端口已被占用：$REALITY_PORT"
+  error "Reality 端口已被占用：$REALITY_PORT"
   exit 1
 fi
 
 if is_port_in_use "$WS_PORT"; then
-  echo "WS 端口已被占用：$WS_PORT"
+  error "WS 端口已被占用：$WS_PORT"
   exit 1
 fi
 
 if [ "$REALITY_PORT" = "$WS_PORT" ]; then
-  echo "Reality 端口和 WS 端口不能相同"
+  error "Reality 端口和 WS 端口不能相同"
   exit 1
 fi
 
@@ -450,11 +487,12 @@ INFO
 cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
 
 echo
+headline "===== Xray 双节点信息 ====="
 cat "$NODE_INFO_FILE"
 echo
-echo "节点信息已保存到："
-echo "$NODE_INFO_FILE"
-echo "$NODE_INFO_COPY"
+success "节点信息已保存到："
+printf '%b\n' "$GREEN$NODE_INFO_FILE$RESET"
+printf '%b\n' "$GREEN$NODE_INFO_COPY$RESET"
 echo
-echo "===== 服务状态 ====="
+headline "===== 服务状态 ====="
 show_status
