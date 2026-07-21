@@ -3,12 +3,60 @@ set -e
 
 SNI="www.sony.com"
 WS_PATH="/ws"
+NODE_INFO_FILE="/usr/local/etc/xray/node-info.txt"
+NODE_INFO_COPY="/root/xray-node-info.txt"
 
 require_root() {
   if [ "$(id -u)" != "0" ]; then
     echo "请使用 root 用户运行此脚本"
     exit 1
   fi
+}
+
+show_node_info() {
+  if [ -f "$NODE_INFO_FILE" ]; then
+    cat "$NODE_INFO_FILE"
+    return
+  fi
+
+  if [ -f "$NODE_INFO_COPY" ]; then
+    cat "$NODE_INFO_COPY"
+    return
+  fi
+
+  echo "未找到已保存的节点信息。"
+  echo "请先运行安装脚本完成部署。"
+  exit 1
+}
+
+choose_action_if_installed() {
+  if [ ! -f "$NODE_INFO_FILE" ] && [ ! -f "$NODE_INFO_COPY" ]; then
+    return
+  fi
+
+  if [ ! -t 0 ] || [ ! -r /dev/tty ]; then
+    return
+  fi
+
+  echo "检测到已保存的节点信息。"
+  echo "1. 查看节点信息"
+  echo "2. 重新安装 / 覆盖节点"
+  printf '请选择 [默认: 1]: ' >/dev/tty
+  read -r ACTION </dev/tty || ACTION=""
+
+  case "$ACTION" in
+    ""|1)
+      show_node_info
+      exit 0
+      ;;
+    2)
+      echo "继续重新安装，将生成新的节点信息。"
+      ;;
+    *)
+      echo "无效选择，已取消。"
+      exit 1
+      ;;
+  esac
 }
 
 install_deps() {
@@ -203,7 +251,27 @@ show_status() {
     netstat -tunlp | grep -E ":${REALITY_PORT}|:${WS_PORT}" || true
 }
 
+case "${1:-}" in
+  info|show|view|--info|--show|--view)
+    show_node_info
+    exit 0
+    ;;
+  install|--install|"")
+    ;;
+  *)
+    echo "用法："
+    echo "  $0              安装或在已安装时显示菜单"
+    echo "  $0 install      直接安装 / 重装"
+    echo "  $0 info         查看已保存的节点信息"
+    exit 1
+    ;;
+esac
+
 require_root
+if [ "${1:-}" != "install" ] && [ "${1:-}" != "--install" ]; then
+  choose_action_if_installed
+fi
+
 install_deps
 
 PUBLIC_IP="$(detect_ip)"
@@ -345,17 +413,48 @@ else
   write_fallback_launcher
 fi
 
+cat >"$NODE_INFO_FILE" <<INFO
+===== Xray 双节点信息 =====
+
+公网 IP：
+$PUBLIC_IP
+
+===== Reality 节点 =====
+端口：$REALITY_PORT
+SNI：$SNI
+UUID：$REALITY_UUID
+PublicKey：$PUBLIC_KEY
+Short ID：$SHORT_ID
+链接：
+vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}
+
+===== WS 节点 =====
+端口：$WS_PORT
+路径：$WS_PATH
+UUID：$WS_UUID
+链接：
+vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}
+
+===== 常用命令 =====
+查看节点信息：
+/root/install-xray-dual-auto.sh info
+
+配置文件：
+/usr/local/etc/xray/config.json
+
+节点信息文件：
+$NODE_INFO_FILE
+$NODE_INFO_COPY
+INFO
+
+cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
+
 echo
-echo "===== 公网 IP ====="
-echo "$PUBLIC_IP"
+cat "$NODE_INFO_FILE"
 echo
-echo "===== Reality 节点 ====="
-echo "端口：$REALITY_PORT"
-echo "vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}"
-echo
-echo "===== WS 节点 ====="
-echo "端口：$WS_PORT"
-echo "vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}"
+echo "节点信息已保存到："
+echo "$NODE_INFO_FILE"
+echo "$NODE_INFO_COPY"
 echo
 echo "===== 服务状态 ====="
 show_status

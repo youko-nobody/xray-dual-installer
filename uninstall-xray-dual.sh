@@ -25,6 +25,7 @@ stop_systemd_service "xray"
 stop_openrc_service "xray"
 
 rm -f /root/start-xray.sh
+rm -f /root/xray-node-info.txt
 rm -f /usr/local/bin/xray
 rm -rf /usr/local/etc/xray
 rm -f /var/log/xray.log
@@ -36,6 +37,7 @@ echo "已删除以下文件："
 echo "- /usr/local/bin/xray"
 echo "- /usr/local/etc/xray"
 echo "- /root/start-xray.sh"
+echo "- /root/xray-node-info.txt"
 echo "- /var/log/xray.log"
 echo "- /var/log/xray-access.log"
 echo "- /var/log/xray-error.log"

@@ -44,6 +44,7 @@ curl -L -o /root/uninstall-xray-dual.sh https://raw.githubusercontent.com/youko-
 - 直接回车时使用推荐端口
 - 自动生成 UUID、Reality 密钥和 Short ID
 - 根据系统自动配置 `systemd` 或 `OpenRC` 开机自启
+- 自动保存节点信息，后续可直接查看
 
 ## 支持系统
 
@@ -109,6 +110,12 @@ curl -L -o /root/uninstall-xray-dual.sh https://raw.githubusercontent.com/youko-
 - Reality 节点链接
 - WS 节点链接
 - 当前服务状态
+
+如果你第一次没有复制，后续可以直接运行：
+
+```sh
+/root/install-xray-dual-auto.sh info
+```
 
 ## 相关文件
 
