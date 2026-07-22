@@ -43,6 +43,83 @@ headline() {
   printf '%b%s%b\n' "$BOLD$BLUE" "$*" "$RESET"
 }
 
+label() {
+  printf '%b%s%b' "$CYAN" "$1" "$RESET"
+}
+
+value() {
+  printf '%b%s%b\n' "$GREEN" "$1" "$RESET"
+}
+
+print_node_info_colored() {
+  headline "===== Xray 双节点信息 ====="
+  echo
+  label "公网 IP："
+  value "$PUBLIC_IP"
+  echo
+
+  printf '%b%s%b\n' "$BOLD$GREEN" "===== Reality 节点 =====" "$RESET"
+  label "端口："
+  value "$REALITY_PORT"
+  label "SNI："
+  value "$SNI"
+  label "UUID："
+  value "$REALITY_UUID"
+  label "PublicKey："
+  value "$PUBLIC_KEY"
+  label "Short ID："
+  value "$SHORT_ID"
+  label "链接："
+  echo
+  printf '%b%s%b\n' "$YELLOW" "vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}" "$RESET"
+  echo
+
+  printf '%b%s%b\n' "$BOLD$GREEN" "===== WS 节点 =====" "$RESET"
+  label "端口："
+  value "$WS_PORT"
+  label "路径："
+  value "$WS_PATH"
+  label "UUID："
+  value "$WS_UUID"
+  label "链接："
+  echo
+  printf '%b%s%b\n' "$YELLOW" "vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}" "$RESET"
+  echo
+
+  headline "===== 常用命令 ====="
+  label "查看节点信息："
+  echo
+  printf '%b%s%b\n' "$GREEN" "/root/install-xray-dual-auto.sh info" "$RESET"
+  echo
+  label "配置文件："
+  echo
+  printf '%b%s%b\n' "$GREEN" "/usr/local/etc/xray/config.json" "$RESET"
+  echo
+  label "节点信息文件："
+  echo
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
+}
+
+print_saved_node_info_colored() {
+  INFO_FILE="$1"
+  awk \
+    -v red="$RED" \
+    -v green="$GREEN" \
+    -v yellow="$YELLOW" \
+    -v blue="$BLUE" \
+    -v cyan="$CYAN" \
+    -v bold="$BOLD" \
+    -v reset="$RESET" \
+    '
+      /^===== .* =====$/ { print bold blue $0 reset; next }
+      /^(公网 IP|端口|SNI|UUID|PublicKey|Short ID|路径|查看节点信息|配置文件|节点信息文件)：/ { print cyan $0 reset; next }
+      /^vless:\/\// { print yellow $0 reset; next }
+      /^\/.*$/ { print green $0 reset; next }
+      { print }
+    ' "$INFO_FILE"
+}
+
 require_root() {
   if [ "$(id -u)" != "0" ]; then
     error "请使用 root 用户运行此脚本"
@@ -52,12 +129,12 @@ require_root() {
 
 show_node_info() {
   if [ -f "$NODE_INFO_FILE" ]; then
-    cat "$NODE_INFO_FILE"
+    print_saved_node_info_colored "$NODE_INFO_FILE"
     return
   fi
 
   if [ -f "$NODE_INFO_COPY" ]; then
-    cat "$NODE_INFO_COPY"
+    print_saved_node_info_colored "$NODE_INFO_COPY"
     return
   fi
 
@@ -487,8 +564,7 @@ INFO
 cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
 
 echo
-headline "===== Xray 双节点信息 ====="
-cat "$NODE_INFO_FILE"
+print_node_info_colored
 echo
 success "节点信息已保存到："
 printf '%b\n' "$GREEN$NODE_INFO_FILE$RESET"
