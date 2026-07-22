@@ -19,6 +19,41 @@
 > [!TIP]
 > 适合想快速部署双节点、并且希望后续能一条命令找回节点信息的自用场景。
 
+## 综合脚本快速安装
+
+推荐优先使用综合脚本，一个入口可以选择：
+
+```text
+1. VLESS + Reality 单节点
+2. VLESS + Reality + VLESS + WS 双节点
+3. Hysteria2 / HY2 节点
+```
+
+直接复制执行：
+
+```sh
+wget -O /root/install.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install.sh && chmod +x /root/install.sh && /root/install.sh
+```
+
+如果系统里没有 `wget`，可以用 `curl`：
+
+```sh
+curl -L -o /root/install.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install.sh && chmod +x /root/install.sh && /root/install.sh
+```
+
+综合脚本也支持直接指定部署类型：
+
+```sh
+/root/install.sh reality
+/root/install.sh dual
+/root/install.sh hy2
+/root/install.sh info
+/root/install.sh uninstall
+```
+
+> [!IMPORTANT]
+> 选 `1` 或 `2` 会覆盖当前 Xray 配置；HY2 可以和 Xray 共存。
+
 ## 单 Reality 快速安装
 
 直接复制执行：

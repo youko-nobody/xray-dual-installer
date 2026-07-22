@@ -354,6 +354,16 @@ START
   /root/start-xray.sh
 }
 
+stop_existing_xray() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    systemctl stop xray >/dev/null 2>&1 || true
+  fi
+  if command -v rc-service >/dev/null 2>&1; then
+    rc-service xray stop >/dev/null 2>&1 || true
+  fi
+  pkill -f "/usr/local/bin/xray run -config /usr/local/etc/xray/config.json" 2>/dev/null || true
+}
+
 show_status() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
     systemctl status xray --no-pager || true
@@ -387,6 +397,7 @@ if [ "${1:-}" != "install" ] && [ "${1:-}" != "--install" ]; then
 fi
 
 install_deps
+stop_existing_xray
 
 PUBLIC_IP="$(detect_ip)"
 XRAY_ZIP="$(detect_xray_zip)"
