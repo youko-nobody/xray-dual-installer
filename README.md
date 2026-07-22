@@ -9,6 +9,7 @@
 
 一个中文化的一键安装脚本仓库，用来快速部署：
 
+- `VLESS + Reality` 单节点
 - `VLESS + Reality`
 - `VLESS + WS`
 - `Hysteria2 / HY2`
@@ -17,6 +18,23 @@
 
 > [!TIP]
 > 适合想快速部署双节点、并且希望后续能一条命令找回节点信息的自用场景。
+
+## 单 Reality 快速安装
+
+直接复制执行：
+
+```sh
+wget -O /root/install-reality.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-reality.sh && chmod +x /root/install-reality.sh && /root/install-reality.sh
+```
+
+如果系统里没有 `wget`，可以用 `curl`：
+
+```sh
+curl -L -o /root/install-reality.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-reality.sh && chmod +x /root/install-reality.sh && /root/install-reality.sh
+```
+
+> [!IMPORTANT]
+> 单 Reality 默认使用 `443/TCP`，安装完成后请放行你选择的 TCP 端口。
 
 ## Xray 双节点快速安装
 
@@ -53,6 +71,19 @@ curl -L -o /root/install-hy2.sh https://raw.githubusercontent.com/youko-nobody/x
 > HY2 使用 `UDP`，安装完成后请放行你选择的 `UDP` 端口。默认端口是 `8443/UDP`。
 
 ## 查看节点信息
+
+### 查看单 Reality 节点
+
+```sh
+/root/install-reality.sh info
+```
+
+单 Reality 节点信息会保存到：
+
+```sh
+/usr/local/etc/xray/reality-node-info.txt
+/root/reality-node-info.txt
+```
 
 ### 查看 Xray 节点
 
@@ -94,6 +125,18 @@ HY2 节点信息会保存到：
 
 ## 一键卸载
 
+### 卸载单 Reality 节点
+
+```sh
+wget -O /root/uninstall-reality.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-reality.sh && chmod +x /root/uninstall-reality.sh && /root/uninstall-reality.sh
+```
+
+如果系统里没有 `wget`，可以用 `curl`：
+
+```sh
+curl -L -o /root/uninstall-reality.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-reality.sh && chmod +x /root/uninstall-reality.sh && /root/uninstall-reality.sh
+```
+
 ### 卸载 Xray 双节点
 
 直接复制执行：
@@ -134,6 +177,7 @@ curl -L -o /root/uninstall-hy2.sh https://raw.githubusercontent.com/youko-nobody
 | 自动开机自启 | 支持 `systemd` 和 `OpenRC` |
 | 保存节点信息 | 保存节点链接，后续可用 `info` 查看 |
 | 中文提示 | 安装、报错、输出信息均为中文 |
+| 单 Reality 支持 | 支持只部署一个 `VLESS + Reality` 节点 |
 | HY2 支持 | 支持一键部署 Hysteria2，自签证书，自动输出 `hy2://` 链接 |
 
 ## 支持系统
@@ -155,6 +199,16 @@ curl -L -o /root/uninstall-hy2.sh https://raw.githubusercontent.com/youko-nobody
 ```
 
 ## 默认配置
+
+### 单 Reality 节点
+
+| 项目 | 默认值 |
+| --- | --- |
+| Reality 端口 | `443/TCP` |
+| Reality SNI | `www.sony.com` |
+| Reality 目标站 | `www.sony.com:443` |
+| Flow | `xtls-rprx-vision` |
+| 日志级别 | `warning` |
 
 ### Xray 双节点
 
@@ -180,6 +234,7 @@ curl -L -o /root/uninstall-hy2.sh https://raw.githubusercontent.com/youko-nobody
 
 安装时你最终选择的两个端口都需要放行：
 
+- `单 Reality 端口 / TCP`
 - `Reality 端口 / TCP`
 - `WS 端口 / TCP`
 
@@ -205,6 +260,12 @@ HY2 需要放行 UDP 端口，例如：
 
 ## 常用命令
 
+### 查看单 Reality 节点信息
+
+```sh
+/root/install-reality.sh info
+```
+
 ### 查看 Xray 节点信息
 
 ```sh
@@ -221,6 +282,12 @@ HY2 需要放行 UDP 端口，例如：
 
 ```sh
 /root/install-xray-dual-auto.sh install
+```
+
+### 强制重新安装单 Reality
+
+```sh
+/root/install-reality.sh install
 ```
 
 ### 强制重新安装 HY2
@@ -381,9 +448,13 @@ rc-service hysteria stop
 | --- | --- |
 | `/usr/local/bin/xray` | Xray 主程序 |
 | `/usr/local/etc/xray/config.json` | Xray 配置文件 |
+| `/usr/local/etc/xray/reality-node-info.txt` | 单 Reality 节点信息文件 |
 | `/usr/local/etc/xray/node-info.txt` | 节点信息文件 |
+| `/root/reality-node-info.txt` | 单 Reality 节点信息备份 |
 | `/root/xray-node-info.txt` | 节点信息备份 |
+| `/root/install-reality.sh` | 单 Reality 安装脚本 |
 | `/root/install-xray-dual-auto.sh` | 安装脚本 |
+| `/root/uninstall-reality.sh` | 单 Reality 卸载脚本 |
 | `/root/uninstall-xray-dual.sh` | 卸载脚本 |
 | `/root/start-xray.sh` | 无服务管理器时的启动脚本 |
 | `/var/log/xray-access.log` | 访问日志 |
@@ -399,6 +470,17 @@ rc-service hysteria stop
 | `/var/log/hysteria.log` | HY2 fallback 后台启动日志 |
 
 ## 卸载会删除的内容
+
+### 单 Reality 节点
+
+- `/usr/local/bin/xray`
+- `/usr/local/etc/xray`
+- `/root/start-xray.sh`
+- `/root/reality-node-info.txt`
+- `/var/log/xray.log`
+- `/var/log/xray-access.log`
+- `/var/log/xray-error.log`
+- `systemd` 或 `OpenRC` 中的 `xray` 服务定义
 
 ### Xray 双节点
 
@@ -532,6 +614,7 @@ systemctl restart hysteria-server.service
 
 ## 项目说明
 
+- 当前单 Reality 脚本只部署一个 `VLESS + Reality` 节点。
 - 当前脚本部署的是 `VLESS + Reality` 和 `VLESS + WS`。
 - 当前 HY2 脚本部署的是 `Hysteria2`。
 - 当前 WS 节点是 `security=none`，不是 `VLESS + WS + TLS`。
