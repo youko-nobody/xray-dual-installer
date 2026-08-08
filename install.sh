@@ -82,11 +82,12 @@ show_menu() {
   printf '%b1.%b VLESS + Reality 单节点\n' "$GREEN" "$RESET"
   printf '%b2.%b VLESS + Reality + VLESS + WS 双节点\n' "$GREEN" "$RESET"
   printf '%b3.%b Hysteria2 / HY2 节点\n' "$GREEN" "$RESET"
-  printf '%b4.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
-  printf '%b5.%b 卸载节点\n' "$YELLOW" "$RESET"
+  printf '%b4.%b Snell v6 节点\n' "$GREEN" "$RESET"
+  printf '%b5.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
+  printf '%b6.%b 卸载节点\n' "$YELLOW" "$RESET"
   printf '%b0.%b 退出\n' "$RED" "$RESET"
   echo
-  warn "提示：选 1 或 2 会覆盖当前 Xray 配置；HY2 可以和 Xray 共存。"
+  warn "提示：选 1 或 2 会覆盖当前 Xray 配置；HY2 和 Snell 可以与 Xray 共存。"
   echo
 }
 
@@ -96,6 +97,7 @@ show_info_menu() {
   printf '%b1.%b 查看单 Reality 节点\n' "$GREEN" "$RESET"
   printf '%b2.%b 查看 Xray 双节点\n' "$GREEN" "$RESET"
   printf '%b3.%b 查看 HY2 节点\n' "$GREEN" "$RESET"
+  printf '%b4.%b 查看 Snell v6 节点\n' "$GREEN" "$RESET"
   printf '%b0.%b 返回\n' "$YELLOW" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -114,6 +116,10 @@ show_info_menu() {
       ensure_script "install-hy2.sh" "/root/install-hy2.sh"
       /root/install-hy2.sh info
       ;;
+    4)
+      ensure_script "install-snell.sh" "/root/install-snell.sh"
+      /root/install-snell.sh info
+      ;;
     ""|0)
       return
       ;;
@@ -129,7 +135,8 @@ show_uninstall_menu() {
   printf '%b1.%b 卸载单 Reality 节点\n' "$YELLOW" "$RESET"
   printf '%b2.%b 卸载 Xray 双节点\n' "$YELLOW" "$RESET"
   printf '%b3.%b 卸载 HY2 节点\n' "$YELLOW" "$RESET"
-  printf '%b4.%b 卸载 Xray + HY2 全部节点\n' "$RED" "$RESET"
+  printf '%b4.%b 卸载 Snell v6 节点\n' "$YELLOW" "$RESET"
+  printf '%b5.%b 卸载 Xray + HY2 + Snell 全部节点\n' "$RED" "$RESET"
   printf '%b0.%b 返回\n' "$CYAN" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -146,12 +153,16 @@ show_uninstall_menu() {
       run_remote_script "uninstall-hy2.sh" "/root/uninstall-hy2.sh"
       ;;
     4)
-      warn "即将卸载 Xray 和 HY2 相关节点。"
+      run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh"
+      ;;
+    5)
+      warn "即将卸载 Xray、HY2 和 Snell 相关节点。"
       printf '确认卸载全部？输入 yes 继续: '
       read -r CONFIRM || CONFIRM=""
       if [ "$CONFIRM" = "yes" ]; then
         run_remote_script "uninstall-xray-dual.sh" "/root/uninstall-xray-dual.sh"
         run_remote_script "uninstall-hy2.sh" "/root/uninstall-hy2.sh"
+        run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh"
       else
         warn "已取消卸载。"
       fi
@@ -181,6 +192,10 @@ main() {
       run_remote_script "install-hy2.sh" "/root/install-hy2.sh" install
       exit 0
       ;;
+    snell)
+      run_remote_script "install-snell.sh" "/root/install-snell.sh" install
+      exit 0
+      ;;
     info)
       show_info_menu
       exit 0
@@ -197,6 +212,7 @@ main() {
       printf '%s\n' "  $0 reality     直接部署单 Reality"
       printf '%s\n' "  $0 dual        直接部署 Xray 双节点"
       printf '%s\n' "  $0 hy2         直接部署 HY2"
+      printf '%s\n' "  $0 snell       直接部署 Snell v6"
       printf '%s\n' "  $0 info        查看节点信息菜单"
       printf '%s\n' "  $0 uninstall   卸载菜单"
       exit 1
@@ -225,9 +241,14 @@ main() {
         exit 0
         ;;
       4)
-        show_info_menu
+        run_remote_script "install-snell.sh" "/root/install-snell.sh" install
+        pause_hint
+        exit 0
         ;;
       5)
+        show_info_menu
+        ;;
+      6)
         show_uninstall_menu
         ;;
       0)
