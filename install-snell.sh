@@ -33,8 +33,6 @@ success() { printf '%b%s%b\n' "$GREEN" "$*" "$RESET"; }
 warn() { printf '%b%s%b\n' "$YELLOW" "$*" "$RESET" >&2; }
 error() { printf '%b%s%b\n' "$RED" "$*" "$RESET" >&2; }
 headline() { printf '%b%s%b\n' "$BOLD$BLUE" "$*" "$RESET"; }
-label() { printf '%b%s%b' "$CYAN" "$1" "$RESET"; }
-value() { printf '%b%s%b\n' "$GREEN" "$1" "$RESET"; }
 
 require_root() {
   if [ "$(id -u)" != "0" ]; then
@@ -147,10 +145,10 @@ prompt_mode() {
     return
   fi
 
-  echo
-  printf '%b1.%b default  推荐，启用混淆和加密\n' "$GREEN" "$RESET" >/dev/tty
-  printf '%b2.%b unshaped  关闭混淆，只保留加密，性能更高\n' "$GREEN" "$RESET" >/dev/tty
-  printf '%b3.%b unsafe-raw  明文转发，只适合内网或其他安全隧道内\n' "$YELLOW" "$RESET" >/dev/tty
+  printf '\n' >/dev/tty
+  printf '%b1.%b default     推荐，启用混淆和加密\n' "$GREEN" "$RESET" >/dev/tty
+  printf '%b2.%b unshaped   关闭混淆，只保留加密，性能更高\n' "$GREEN" "$RESET" >/dev/tty
+  printf '%b3.%b unsafe-raw 明文转发，只适合内网或其他安全隧道内\n' "$YELLOW" "$RESET" >/dev/tty
   printf '请选择 Snell 模式 [默认: 1]: ' >/dev/tty
   read -r MODE_CHOICE </dev/tty || MODE_CHOICE=""
 
@@ -211,8 +209,8 @@ choose_action_if_installed() {
   fi
 
   info "检测到已保存的 Snell 节点信息"
-  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET"
-  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET"
+  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET" >/dev/tty
+  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET" >/dev/tty
   printf '请选择 [默认: 1]: ' >/dev/tty
   read -r ACTION </dev/tty || ACTION=""
 
@@ -385,6 +383,14 @@ stop_existing_snell
 PUBLIC_IP="$(detect_ip)"
 PORT="$(prompt_port)"
 MODE="$(prompt_mode)"
+MODE="$(printf '%s' "$MODE" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+case "$MODE" in
+  default|unshaped|unsafe-raw) ;;
+  *)
+    warn "检测到异常 mode 值，已自动回退到 default"
+    MODE="default"
+    ;;
+esac
 PSK="$(make_psk)"
 
 download_snell
