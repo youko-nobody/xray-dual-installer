@@ -59,6 +59,20 @@ ensure_script() {
   fi
 }
 
+node_flag() {
+  [ -f "$1" ] && printf '%s' "已保存" || printf '%s' "未保存"
+}
+
+show_saved_overview() {
+  headline "===== 已保存节点总览 ====="
+  echo
+  printf '%bReality%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/reality-node-info.txt")"
+  printf '%b双节点%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/node-info.txt")"
+  printf '%bHY2%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/hysteria/node-info.txt")"
+  printf '%bSnell v6%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/snell/node-info.txt")"
+  echo
+}
+
 run_remote_script() {
   REMOTE_NAME="$1"
   LOCAL_PATH="$2"
@@ -88,11 +102,13 @@ show_menu() {
 
 show_info_menu() {
   headline "===== 查看节点信息 ====="
+  show_saved_overview
   echo
   printf '%b1.%b 查看单 Reality 节点\n' "$GREEN" "$RESET"
   printf '%b2.%b 查看 Xray 双节点\n' "$GREEN" "$RESET"
   printf '%b3.%b 查看 HY2 节点\n' "$GREEN" "$RESET"
   printf '%b4.%b 查看 Snell v6 节点\n' "$GREEN" "$RESET"
+  printf '%b5.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
   printf '%b0.%b 返回\n' "$YELLOW" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -113,6 +129,21 @@ show_info_menu() {
     4)
       ensure_script "install-snell.sh" "/root/install-snell.sh"
       /root/install-snell.sh info
+      ;;
+    5)
+      show_saved_overview
+      echo
+      printf '%bReality%b\n' "$BOLD$GREEN" "$RESET"
+      [ -f "/usr/local/etc/xray/reality-node-info.txt" ] && cat /usr/local/etc/xray/reality-node-info.txt || true
+      echo
+      printf '%b双节点%b\n' "$BOLD$GREEN" "$RESET"
+      [ -f "/usr/local/etc/xray/node-info.txt" ] && cat /usr/local/etc/xray/node-info.txt || true
+      echo
+      printf '%bHY2%b\n' "$BOLD$GREEN" "$RESET"
+      [ -f "/etc/hysteria/node-info.txt" ] && cat /etc/hysteria/node-info.txt || true
+      echo
+      printf '%bSnell v6%b\n' "$BOLD$GREEN" "$RESET"
+      [ -f "/etc/snell/node-info.txt" ] && cat /etc/snell/node-info.txt || true
       ;;
     ""|0) return ;;
     *) error "无效选择" ;;
