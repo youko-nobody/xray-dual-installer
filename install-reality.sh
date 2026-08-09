@@ -162,8 +162,8 @@ show_node_info() {
     show_saved_node_info "$NODE_INFO_COPY"
     return
   fi
-  warn "未找到已保存的单 Reality 节点信息。"
-  warn "请先运行安装脚本完成部署。"
+  warn "未找到已保存的 Reality 节点信息"
+  warn "请先运行安装脚本完成部署"
   exit 1
 }
 
@@ -175,9 +175,9 @@ choose_action_if_installed() {
     return
   fi
 
-  info "检测到已保存的单 Reality 节点信息。"
-  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET"
-  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET"
+  info "检测到已保存的 Reality 节点信息"
+  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET" >/dev/tty
+  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET" >/dev/tty
   printf '请选择 [默认: 1]: ' >/dev/tty
   read -r ACTION </dev/tty || ACTION=""
 
@@ -187,10 +187,10 @@ choose_action_if_installed() {
       exit 0
       ;;
     2)
-      info "继续重新安装，将生成新的单 Reality 节点信息。"
+      info "继续重新安装，将生成新的 Reality 节点信息"
       ;;
     *)
-      error "无效选择，已取消。"
+      error "无效选择，已取消"
       exit 1
       ;;
   esac
@@ -272,46 +272,60 @@ show_status() {
   ss -tnlp | grep ":${PORT} " || netstat -tunlp | grep ":${PORT} " || true
 }
 
+show_final_summary() {
+  headline "===== 最终节点信息 ====="
+  echo
+  printf '%b%s%b\n' "$CYAN" "公网 IP：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PUBLIC_IP" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "端口：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PORT" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "SNI：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$SNI" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "UUID：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$UUID" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "PublicKey：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PUBLIC_KEY" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "Short ID：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$SHORT_ID" "$RESET"
+  echo
+  printf '%b%s%b\n' "$BOLD$BLUE" "Reality 链接" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "vless://${UUID}@${PUBLIC_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${PORT}" "$RESET"
+  echo
+  printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
+}
+
 write_node_info() {
   cat >"$NODE_INFO_FILE" <<INFO
-===== 单 Reality 节点信息 =====
+===== Reality 节点信息 =====
 
-公网 IP：
-$PUBLIC_IP
+公网 IP：$PUBLIC_IP
 
-端口：
-$PORT
+端口：$PORT
 
-SNI：
-$SNI
+SNI：$SNI
 
-UUID：
-$UUID
+UUID：$UUID
 
-PublicKey：
-$PUBLIC_KEY
+PublicKey：$PUBLIC_KEY
 
-Short ID：
-$SHORT_ID
+Short ID：$SHORT_ID
 
 链接：
 vless://${UUID}@${PUBLIC_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${PORT}
 
 ===== 常用命令 =====
-查看节点信息：
-/root/install-reality.sh info
+查看节点信息：/root/install-reality.sh info
 
 查看服务状态：
 systemctl status xray --no-pager -l
 
-查看监听端口：
-ss -tnlp | grep :${PORT}
+查看监听端口：ss -tnlp | grep :${PORT}
 
-配置文件：
-$CONFIG_FILE
+配置文件：$CONFIG_FILE
 
-节点信息文件：
-$NODE_INFO_FILE
+节点信息文件：$NODE_INFO_FILE
 $NODE_INFO_COPY
 INFO
 
@@ -329,7 +343,7 @@ case "${1:-}" in
     headline "用法："
     printf '%s\n' "  $0              安装或在已安装时显示菜单"
     printf '%s\n' "  $0 install      直接安装 / 重装"
-    printf '%s\n' "  $0 info         查看已保存的单 Reality 节点信息"
+    printf '%s\n' "  $0 info         查看已保存的 Reality 节点信息"
     exit 1
     ;;
 esac
@@ -434,11 +448,11 @@ fi
 write_node_info
 
 echo
-show_saved_node_info "$NODE_INFO_FILE"
+headline "===== 服务状态 ====="
+show_status
 echo
-success "单 Reality 节点信息已保存到："
+success "Reality 节点信息已保存到："
 printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
 printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
 echo
-headline "===== 服务状态 ====="
-show_status
+show_final_summary

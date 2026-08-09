@@ -32,8 +32,6 @@ success() { printf '%b%s%b\n' "$GREEN" "$*" "$RESET"; }
 warn() { printf '%b%s%b\n' "$YELLOW" "$*" "$RESET" >&2; }
 error() { printf '%b%s%b\n' "$RED" "$*" "$RESET" >&2; }
 headline() { printf '%b%s%b\n' "$BOLD$BLUE" "$*" "$RESET"; }
-label() { printf '%b%s%b' "$CYAN" "$1" "$RESET"; }
-value() { printf '%b%s%b\n' "$GREEN" "$1" "$RESET"; }
 
 require_root() {
   if [ "$(id -u)" != "0" ]; then
@@ -153,8 +151,8 @@ show_node_info() {
     show_saved_node_info "$NODE_INFO_COPY"
     return
   fi
-  warn "未找到已保存的 HY2 节点信息。"
-  warn "请先运行安装脚本完成部署。"
+  warn "未找到已保存的 HY2 节点信息"
+  warn "请先运行安装脚本完成部署"
   exit 1
 }
 
@@ -166,9 +164,9 @@ choose_action_if_installed() {
     return
   fi
 
-  info "检测到已保存的 HY2 节点信息。"
-  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET"
-  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET"
+  info "检测到已保存的 HY2 节点信息"
+  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET" >/dev/tty
+  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET" >/dev/tty
   printf '请选择 [默认: 1]: ' >/dev/tty
   read -r ACTION </dev/tty || ACTION=""
 
@@ -178,10 +176,10 @@ choose_action_if_installed() {
       exit 0
       ;;
     2)
-      info "继续重新安装，将生成新的 HY2 节点信息。"
+      info "继续重新安装，将生成新的 HY2 节点信息"
       ;;
     *)
-      error "无效选择，已取消。"
+      error "无效选择，已取消"
       exit 1
       ;;
   esac
@@ -268,43 +266,54 @@ show_status() {
   ss -unlp | grep ":${PORT} " || true
 }
 
+show_final_summary() {
+  headline "===== 最终节点信息 ====="
+  echo
+  printf '%b%s%b\n' "$CYAN" "公网 IP：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PUBLIC_IP" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "端口：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PORT" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "密码：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PASSWORD" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "SNI：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$SNI" "$RESET"
+  echo
+  printf '%b%s%b\n' "$BOLD$BLUE" "HY2 链接" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "hy2://${PASSWORD}@${PUBLIC_IP}:${PORT}?insecure=1&sni=${SNI}#HY2-${PUBLIC_IP}-${PORT}" "$RESET"
+  echo
+  printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
+}
+
 write_node_info() {
   cat >"$NODE_INFO_FILE" <<INFO
 ===== Hysteria2 节点信息 =====
 
-公网 IP：
-$PUBLIC_IP
+公网 IP：$PUBLIC_IP
 
-端口：
-$PORT
+端口：$PORT
 
-密码：
-$PASSWORD
+密码：$PASSWORD
 
-SNI：
-$SNI
+SNI：$SNI
 
-证书：
-自签证书，客户端需要开启 insecure / 跳过证书验证。
+证书：自签证书，客户端需要开启 insecure / 跳过证书验证
 
 链接：
 hy2://${PASSWORD}@${PUBLIC_IP}:${PORT}?insecure=1&sni=${SNI}#HY2-${PUBLIC_IP}-${PORT}
 
 ===== 常用命令 =====
-查看节点信息：
-/root/install-hy2.sh info
+查看节点信息：/root/install-hy2.sh info
 
 查看服务状态：
 systemctl status hysteria-server.service --no-pager -l
 
-查看监听端口：
-ss -unlp | grep :${PORT}
+查看监听端口：ss -unlp | grep :${PORT}
 
-配置文件：
-$CONFIG_FILE
+配置文件：$CONFIG_FILE
 
-节点信息文件：
-$NODE_INFO_FILE
+节点信息文件：$NODE_INFO_FILE
 $NODE_INFO_COPY
 INFO
 
@@ -379,11 +388,11 @@ fi
 write_node_info
 
 echo
-show_saved_node_info "$NODE_INFO_FILE"
+headline "===== 服务状态 ====="
+show_status
 echo
 success "HY2 节点信息已保存到："
 printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
 printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
 echo
-headline "===== 服务状态 ====="
-show_status
+show_final_summary

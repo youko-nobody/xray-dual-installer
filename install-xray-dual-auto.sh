@@ -5,6 +5,7 @@ SNI="www.sony.com"
 WS_PATH="/ws"
 NODE_INFO_FILE="/usr/local/etc/xray/node-info.txt"
 NODE_INFO_COPY="/root/xray-node-info.txt"
+
 if [ -t 1 ]; then
   RED="$(printf '\033[31m')"
   GREEN="$(printf '\033[32m')"
@@ -23,88 +24,15 @@ else
   RESET=""
 fi
 
-info() {
-  printf '%b%s%b\n' "$CYAN" "$*" "$RESET"
-}
+info() { printf '%b%s%b\n' "$CYAN" "$*" "$RESET"; }
+success() { printf '%b%s%b\n' "$GREEN" "$*" "$RESET"; }
+warn() { printf '%b%s%b\n' "$YELLOW" "$*" "$RESET" >&2; }
+error() { printf '%b%s%b\n' "$RED" "$*" "$RESET" >&2; }
+headline() { printf '%b%s%b\n' "$BOLD$BLUE" "$*" "$RESET"; }
 
-success() {
-  printf '%b%s%b\n' "$GREEN" "$*" "$RESET"
-}
-
-warn() {
-  printf '%b%s%b\n' "$YELLOW" "$*" "$RESET" >&2
-}
-
-error() {
-  printf '%b%s%b\n' "$RED" "$*" "$RESET" >&2
-}
-
-headline() {
-  printf '%b%s%b\n' "$BOLD$BLUE" "$*" "$RESET"
-}
-
-label() {
-  printf '%b%s%b' "$CYAN" "$1" "$RESET"
-}
-
-value() {
-  printf '%b%s%b\n' "$GREEN" "$1" "$RESET"
-}
-
-print_node_info_colored() {
-  headline "===== Xray 双节点信息 ====="
-  echo
-  label "公网 IP："
-  value "$PUBLIC_IP"
-  echo
-
-  printf '%b%s%b\n' "$BOLD$GREEN" "===== Reality 节点 =====" "$RESET"
-  label "端口："
-  value "$REALITY_PORT"
-  label "SNI："
-  value "$SNI"
-  label "UUID："
-  value "$REALITY_UUID"
-  label "PublicKey："
-  value "$PUBLIC_KEY"
-  label "Short ID："
-  value "$SHORT_ID"
-  label "链接："
-  echo
-  printf '%b%s%b\n' "$YELLOW" "vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}" "$RESET"
-  echo
-
-  printf '%b%s%b\n' "$BOLD$GREEN" "===== WS 节点 =====" "$RESET"
-  label "端口："
-  value "$WS_PORT"
-  label "路径："
-  value "$WS_PATH"
-  label "UUID："
-  value "$WS_UUID"
-  label "链接："
-  echo
-  printf '%b%s%b\n' "$YELLOW" "vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}" "$RESET"
-  echo
-
-  headline "===== 常用命令 ====="
-  label "查看节点信息："
-  echo
-  printf '%b%s%b\n' "$GREEN" "/root/install-xray-dual-auto.sh info" "$RESET"
-  echo
-  label "配置文件："
-  echo
-  printf '%b%s%b\n' "$GREEN" "/usr/local/etc/xray/config.json" "$RESET"
-  echo
-  label "节点信息文件："
-  echo
-  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
-  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
-}
-
-print_saved_node_info_colored() {
+show_saved_node_info() {
   INFO_FILE="$1"
   awk \
-    -v red="$RED" \
     -v green="$GREEN" \
     -v yellow="$YELLOW" \
     -v blue="$BLUE" \
@@ -113,11 +41,25 @@ print_saved_node_info_colored() {
     -v reset="$RESET" \
     '
       /^===== .* =====$/ { print bold blue $0 reset; next }
-      /^(公网 IP|端口|SNI|UUID|PublicKey|Short ID|路径|查看节点信息|配置文件|节点信息文件)：/ { print cyan $0 reset; next }
+      /^(公网 IP|端口|SNI|UUID|PublicKey|Short ID|路径|配置文件|节点信息文件|查看节点信息)：/ { print cyan $0 reset; next }
       /^vless:\/\// { print yellow $0 reset; next }
       /^\/.*$/ { print green $0 reset; next }
       { print }
     ' "$INFO_FILE"
+}
+
+show_node_info() {
+  if [ -f "$NODE_INFO_FILE" ]; then
+    show_saved_node_info "$NODE_INFO_FILE"
+    return
+  fi
+  if [ -f "$NODE_INFO_COPY" ]; then
+    show_saved_node_info "$NODE_INFO_COPY"
+    return
+  fi
+  warn "未找到已保存的双节点信息"
+  warn "请先运行安装脚本完成部署"
+  exit 1
 }
 
 require_root() {
@@ -127,34 +69,17 @@ require_root() {
   fi
 }
 
-show_node_info() {
-  if [ -f "$NODE_INFO_FILE" ]; then
-    print_saved_node_info_colored "$NODE_INFO_FILE"
-    return
-  fi
-
-  if [ -f "$NODE_INFO_COPY" ]; then
-    print_saved_node_info_colored "$NODE_INFO_COPY"
-    return
-  fi
-
-  warn "未找到已保存的节点信息。"
-  warn "请先运行安装脚本完成部署。"
-  exit 1
-}
-
 choose_action_if_installed() {
   if [ ! -f "$NODE_INFO_FILE" ] && [ ! -f "$NODE_INFO_COPY" ]; then
     return
   fi
-
   if [ ! -t 0 ] || [ ! -r /dev/tty ]; then
     return
   fi
 
-  info "检测到已保存的节点信息。"
-  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET"
-  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET"
+  info "检测到已保存的双节点信息"
+  printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET" >/dev/tty
+  printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET" >/dev/tty
   printf '请选择 [默认: 1]: ' >/dev/tty
   read -r ACTION </dev/tty || ACTION=""
 
@@ -164,10 +89,10 @@ choose_action_if_installed() {
       exit 0
       ;;
     2)
-      info "继续重新安装，将生成新的节点信息。"
+      info "继续重新安装，将生成新的双节点信息"
       ;;
     *)
-      error "无效选择，已取消。"
+      error "无效选择，已取消"
       exit 1
       ;;
   esac
@@ -176,10 +101,10 @@ choose_action_if_installed() {
 install_deps() {
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y curl wget unzip openssl ca-certificates net-tools procps
+    DEBIAN_FRONTEND=noninteractive apt-get install -y curl wget unzip openssl ca-certificates net-tools procps iproute2
   elif command -v apk >/dev/null 2>&1; then
     apk update
-    apk add curl wget unzip openssl ca-certificates net-tools procps
+    apk add curl wget unzip openssl ca-certificates net-tools procps iproute2
   else
     error "不支持的系统：未找到 apt-get 或 apk"
     exit 1
@@ -229,12 +154,10 @@ is_port_in_use() {
     ss -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "(^|:)$PORT_TO_CHECK$"
     return $?
   fi
-
   if command -v netstat >/dev/null 2>&1; then
     netstat -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "(^|:)$PORT_TO_CHECK$"
     return $?
   fi
-
   return 1
 }
 
@@ -257,16 +180,9 @@ random_port() {
 is_valid_port() {
   VALUE="$1"
   case "$VALUE" in
-    ''|*[!0-9]*)
-      return 1
-      ;;
+    ''|*[!0-9]*) return 1 ;;
   esac
-
-  if [ "$VALUE" -lt 1 ] || [ "$VALUE" -gt 65535 ]; then
-    return 1
-  fi
-
-  return 0
+  [ "$VALUE" -ge 1 ] && [ "$VALUE" -le 65535 ]
 }
 
 prompt_port() {
@@ -285,16 +201,18 @@ prompt_port() {
       return
     fi
 
-    if is_valid_port "$INPUT_VALUE"; then
-      if is_port_in_use "$INPUT_VALUE"; then
-        warn "端口已被占用：$INPUT_VALUE"
-        continue
-      fi
-      printf '%s' "$INPUT_VALUE"
-      return
+    if ! is_valid_port "$INPUT_VALUE"; then
+      warn "端口无效：$INPUT_VALUE"
+      continue
     fi
 
-    warn "端口无效：$INPUT_VALUE"
+    if is_port_in_use "$INPUT_VALUE"; then
+      warn "端口已被占用：$INPUT_VALUE"
+      continue
+    fi
+
+    printf '%s' "$INPUT_VALUE"
+    return
   done
 }
 
@@ -349,7 +267,6 @@ write_fallback_launcher() {
 pkill -f "/usr/local/bin/xray run -config /usr/local/etc/xray/config.json" 2>/dev/null || true
 nohup /usr/local/bin/xray run -config /usr/local/etc/xray/config.json >/var/log/xray.log 2>&1 &
 START
-
   chmod +x /root/start-xray.sh
   /root/start-xray.sh
 }
@@ -366,13 +283,79 @@ stop_existing_xray() {
 
 show_status() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-    systemctl status xray --no-pager || true
+    systemctl status xray --no-pager -l || true
   elif command -v rc-service >/dev/null 2>&1; then
     rc-service xray status || true
   fi
 
-  ss -tnlp | grep -E ":${REALITY_PORT}|:${WS_PORT}" || \
-    netstat -tunlp | grep -E ":${REALITY_PORT}|:${WS_PORT}" || true
+  ss -tnlp | grep -E ":${REALITY_PORT}|:${WS_PORT}" || netstat -tunlp | grep -E ":${REALITY_PORT}|:${WS_PORT}" || true
+}
+
+show_final_summary() {
+  headline "===== 最终节点信息 ====="
+  echo
+  printf '%b%s%b\n' "$CYAN" "公网 IP：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PUBLIC_IP" "$RESET"
+  echo
+  printf '%b%s%b\n' "$BOLD$BLUE" "Reality 节点" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "端口：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$REALITY_PORT" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "SNI：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$SNI" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "UUID：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$REALITY_UUID" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "PublicKey：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PUBLIC_KEY" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "Short ID：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$SHORT_ID" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}" "$RESET"
+  echo
+  printf '%b%s%b\n' "$BOLD$BLUE" "WS 节点" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "端口：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$WS_PORT" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "路径：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$WS_PATH" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "UUID：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$WS_UUID" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}" "$RESET"
+  echo
+  printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
+}
+
+write_node_info() {
+  cat >"$NODE_INFO_FILE" <<INFO
+===== Xray 双节点信息 =====
+
+公网 IP：$PUBLIC_IP
+
+===== Reality 节点 =====
+端口：$REALITY_PORT
+SNI：$SNI
+UUID：$REALITY_UUID
+PublicKey：$PUBLIC_KEY
+Short ID：$SHORT_ID
+链接：
+vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}
+
+===== WS 节点 =====
+端口：$WS_PORT
+路径：$WS_PATH
+UUID：$WS_UUID
+链接：
+vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}
+
+===== 常用命令 =====
+查看节点信息：/root/install-xray-dual-auto.sh info
+
+配置文件：/usr/local/etc/xray/config.json
+
+节点信息文件：$NODE_INFO_FILE
+$NODE_INFO_COPY
+INFO
+
+  cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
 }
 
 case "${1:-}" in
@@ -384,9 +367,9 @@ case "${1:-}" in
     ;;
   *)
     headline "用法："
-    printf '%b\n' "  $0              安装或在已安装时显示菜单"
-    printf '%b\n' "  $0 install      直接安装 / 重装"
-    printf '%b\n' "  $0 info         查看已保存的节点信息"
+    printf '%s\n' "  $0              安装或在已安装时显示菜单"
+    printf '%s\n' "  $0 install      直接安装 / 重装"
+    printf '%s\n' "  $0 info         查看已保存的双节点信息"
     exit 1
     ;;
 esac
@@ -411,26 +394,6 @@ done
 info "检测到公网 IP：$PUBLIC_IP"
 REALITY_PORT="$(prompt_port "Reality 端口" "$DEFAULT_REALITY_PORT")"
 WS_PORT="$(prompt_port "WS 端口" "$DEFAULT_WS_PORT")"
-
-if ! is_valid_port "$REALITY_PORT"; then
-  error "Reality 端口无效：$REALITY_PORT"
-  exit 1
-fi
-
-if ! is_valid_port "$WS_PORT"; then
-  error "WS 端口无效：$WS_PORT"
-  exit 1
-fi
-
-if is_port_in_use "$REALITY_PORT"; then
-  error "Reality 端口已被占用：$REALITY_PORT"
-  exit 1
-fi
-
-if is_port_in_use "$WS_PORT"; then
-  error "WS 端口已被占用：$WS_PORT"
-  exit 1
-fi
 
 if [ "$REALITY_PORT" = "$WS_PORT" ]; then
   error "Reality 端口和 WS 端口不能相同"
@@ -538,48 +501,14 @@ else
   write_fallback_launcher
 fi
 
-cat >"$NODE_INFO_FILE" <<INFO
-===== Xray 双节点信息 =====
+write_node_info
 
-公网 IP：
-$PUBLIC_IP
-
-===== Reality 节点 =====
-端口：$REALITY_PORT
-SNI：$SNI
-UUID：$REALITY_UUID
-PublicKey：$PUBLIC_KEY
-Short ID：$SHORT_ID
-链接：
-vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}
-
-===== WS 节点 =====
-端口：$WS_PORT
-路径：$WS_PATH
-UUID：$WS_UUID
-链接：
-vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}
-
-===== 常用命令 =====
-查看节点信息：
-/root/install-xray-dual-auto.sh info
-
-配置文件：
-/usr/local/etc/xray/config.json
-
-节点信息文件：
-$NODE_INFO_FILE
-$NODE_INFO_COPY
-INFO
-
-cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
-
-echo
-print_node_info_colored
-echo
-success "节点信息已保存到："
-printf '%b\n' "$GREEN$NODE_INFO_FILE$RESET"
-printf '%b\n' "$GREEN$NODE_INFO_COPY$RESET"
 echo
 headline "===== 服务状态 ====="
 show_status
+echo
+success "双节点信息已保存到："
+printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
+printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
+echo
+show_final_summary
