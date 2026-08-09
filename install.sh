@@ -37,7 +37,6 @@ require_root() {
 fetch_file() {
   REMOTE_NAME="$1"
   LOCAL_PATH="$2"
-
   info "正在获取脚本：$REMOTE_NAME"
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL -o "$LOCAL_PATH" "$BASE_URL/$REMOTE_NAME"
@@ -47,14 +46,12 @@ fetch_file() {
     error "未找到 curl 或 wget，无法下载脚本"
     exit 1
   fi
-
   chmod +x "$LOCAL_PATH"
 }
 
 ensure_script() {
   REMOTE_NAME="$1"
   LOCAL_PATH="$2"
-
   if [ ! -f "$LOCAL_PATH" ]; then
     fetch_file "$REMOTE_NAME" "$LOCAL_PATH"
   else
@@ -66,7 +63,6 @@ run_remote_script() {
   REMOTE_NAME="$1"
   LOCAL_PATH="$2"
   ACTION="${3:-install}"
-
   fetch_file "$REMOTE_NAME" "$LOCAL_PATH"
   "$LOCAL_PATH" "$ACTION"
 }
@@ -88,7 +84,6 @@ show_menu() {
   printf '%b0.%b 退出\n' "$RED" "$RESET"
   echo
   warn "提示：选 1 或 2 会覆盖当前 Xray 配置；HY2 和 Snell 可以与 Xray 共存。"
-  echo
 }
 
 show_info_menu() {
@@ -102,7 +97,6 @@ show_info_menu() {
   echo
   printf '请选择 [默认: 0]: '
   read -r INFO_CHOICE || INFO_CHOICE=""
-
   case "$INFO_CHOICE" in
     1)
       ensure_script "install-reality.sh" "/root/install-reality.sh"
@@ -120,12 +114,8 @@ show_info_menu() {
       ensure_script "install-snell.sh" "/root/install-snell.sh"
       /root/install-snell.sh info
       ;;
-    ""|0)
-      return
-      ;;
-    *)
-      error "无效选择"
-      ;;
+    ""|0) return ;;
+    *) error "无效选择" ;;
   esac
 }
 
@@ -141,20 +131,11 @@ show_uninstall_menu() {
   echo
   printf '请选择 [默认: 0]: '
   read -r UNINSTALL_CHOICE || UNINSTALL_CHOICE=""
-
   case "$UNINSTALL_CHOICE" in
-    1)
-      run_remote_script "uninstall-reality.sh" "/root/uninstall-reality.sh"
-      ;;
-    2)
-      run_remote_script "uninstall-xray-dual.sh" "/root/uninstall-xray-dual.sh"
-      ;;
-    3)
-      run_remote_script "uninstall-hy2.sh" "/root/uninstall-hy2.sh"
-      ;;
-    4)
-      run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh"
-      ;;
+    1) run_remote_script "uninstall-reality.sh" "/root/uninstall-reality.sh" ;;
+    2) run_remote_script "uninstall-xray-dual.sh" "/root/uninstall-xray-dual.sh" ;;
+    3) run_remote_script "uninstall-hy2.sh" "/root/uninstall-hy2.sh" ;;
+    4) run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh" ;;
     5)
       warn "即将卸载 Xray、HY2 和 Snell 相关节点。"
       printf '确认卸载全部？输入 yes 继续: '
@@ -167,45 +148,21 @@ show_uninstall_menu() {
         warn "已取消卸载。"
       fi
       ;;
-    ""|0)
-      return
-      ;;
-    *)
-      error "无效选择"
-      ;;
+    ""|0) return ;;
+    *) error "无效选择" ;;
   esac
 }
 
 main() {
   require_root
-
   case "${1:-}" in
-    reality)
-      run_remote_script "install-reality.sh" "/root/install-reality.sh" install
-      exit 0
-      ;;
-    dual)
-      run_remote_script "install-xray-dual-auto.sh" "/root/install-xray-dual-auto.sh" install
-      exit 0
-      ;;
-    hy2)
-      run_remote_script "install-hy2.sh" "/root/install-hy2.sh" install
-      exit 0
-      ;;
-    snell)
-      run_remote_script "install-snell.sh" "/root/install-snell.sh" install
-      exit 0
-      ;;
-    info)
-      show_info_menu
-      exit 0
-      ;;
-    uninstall)
-      show_uninstall_menu
-      exit 0
-      ;;
-    ""|menu)
-      ;;
+    reality) run_remote_script "install-reality.sh" "/root/install-reality.sh" install; exit 0 ;;
+    dual) run_remote_script "install-xray-dual-auto.sh" "/root/install-xray-dual-auto.sh" install; exit 0 ;;
+    hy2) run_remote_script "install-hy2.sh" "/root/install-hy2.sh" install; exit 0 ;;
+    snell) run_remote_script "install-snell.sh" "/root/install-snell.sh" install; exit 0 ;;
+    info) show_info_menu; exit 0 ;;
+    uninstall) show_uninstall_menu; exit 0 ;;
+    ""|menu) ;;
     *)
       headline "用法："
       printf '%s\n' "  $0             打开综合菜单"
@@ -223,41 +180,15 @@ main() {
     show_menu
     printf '请选择 [默认: 1]: '
     read -r CHOICE || CHOICE=""
-
     case "$CHOICE" in
-      ""|1)
-        run_remote_script "install-reality.sh" "/root/install-reality.sh" install
-        pause_hint
-        exit 0
-        ;;
-      2)
-        run_remote_script "install-xray-dual-auto.sh" "/root/install-xray-dual-auto.sh" install
-        pause_hint
-        exit 0
-        ;;
-      3)
-        run_remote_script "install-hy2.sh" "/root/install-hy2.sh" install
-        pause_hint
-        exit 0
-        ;;
-      4)
-        run_remote_script "install-snell.sh" "/root/install-snell.sh" install
-        pause_hint
-        exit 0
-        ;;
-      5)
-        show_info_menu
-        ;;
-      6)
-        show_uninstall_menu
-        ;;
-      0)
-        success "已退出。"
-        exit 0
-        ;;
-      *)
-        error "无效选择，请重新输入。"
-        ;;
+      ""|1) run_remote_script "install-reality.sh" "/root/install-reality.sh" install; pause_hint; exit 0 ;;
+      2) run_remote_script "install-xray-dual-auto.sh" "/root/install-xray-dual-auto.sh" install; pause_hint; exit 0 ;;
+      3) run_remote_script "install-hy2.sh" "/root/install-hy2.sh" install; pause_hint; exit 0 ;;
+      4) run_remote_script "install-snell.sh" "/root/install-snell.sh" install; pause_hint; exit 0 ;;
+      5) show_info_menu ;;
+      6) show_uninstall_menu ;;
+      0) success "已退出。"; exit 0 ;;
+      *) error "无效选择，请重新输入。" ;;
     esac
   done
 }
