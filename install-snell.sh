@@ -319,6 +319,28 @@ show_status() {
   ss -tnlp | grep ":${PORT} " || netstat -tunlp | grep ":${PORT} " || true
 }
 
+show_final_summary() {
+  headline "===== 最终节点信息 ====="
+  echo
+  printf '%b%s%b\n' "$CYAN" "公网 IP：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PUBLIC_IP" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "端口：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PORT" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "PSK：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$PSK" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "版本：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "6" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "模式：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$MODE" "$RESET"
+  echo
+  printf '%b%s%b\n' "$BOLD$BLUE" "[Proxy]" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "snell = $PUBLIC_IP, $PORT, psk=$PSK, version=6, reuse=true" "$RESET"
+  echo
+  printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
+}
+
 write_node_info() {
   cat >"$NODE_INFO_FILE" <<INFO
 ===== Snell v6 节点信息 =====
@@ -417,11 +439,11 @@ fi
 write_node_info
 
 echo
-show_saved_node_info "$NODE_INFO_FILE"
+headline "===== 服务状态 ====="
+show_status
 echo
 success "Snell 节点信息已保存到："
 printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
 printf '%b%s%b\n' "$GREEN" "$NODE_INFO_COPY" "$RESET"
 echo
-headline "===== 服务状态 ====="
-show_status
+show_final_summary
