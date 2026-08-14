@@ -101,7 +101,7 @@ show_menu() {
   printf '%b8.%b 卸载节点\n' "$YELLOW" "$RESET"
   printf '%b0.%b 退出\n' "$RED" "$RESET"
   echo
-  warn "提示：Reality、双节点、SOCKS5 会覆盖当前 Xray 配置；HY2、Snell、MTProto 可与 Xray 共存。"
+  warn "提示：Reality 与 SOCKS5 现已可独立共存；双节点仍会占用自己的 Xray 配置。"
 }
 
 show_info_menu() {

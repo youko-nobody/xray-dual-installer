@@ -3,9 +3,13 @@ set -e
 
 DEFAULT_PORT="443"
 SNI="www.sony.com"
-CONFIG_FILE="/usr/local/etc/xray/config.json"
+SERVICE_NAME="xray-reality"
+CONFIG_FILE="/usr/local/etc/xray/reality-config.json"
 NODE_INFO_FILE="/usr/local/etc/xray/reality-node-info.txt"
 NODE_INFO_COPY="/root/reality-node-info.txt"
+ACCESS_LOG="/var/log/xray-reality-access.log"
+ERROR_LOG="/var/log/xray-reality-error.log"
+PID_HINT="run -config $CONFIG_FILE"
 
 if [ -t 1 ]; then
   RED="$(printf '\033[31m')"
@@ -117,19 +121,15 @@ prompt_port() {
     else
       INPUT_PORT=""
     fi
-
     [ -n "$INPUT_PORT" ] || INPUT_PORT="$DEFAULT_PORT"
-
     if ! is_valid_port "$INPUT_PORT"; then
       warn "端口无效：$INPUT_PORT"
       continue
     fi
-
     if is_tcp_port_in_use "$INPUT_PORT"; then
       warn "TCP 端口已被占用：$INPUT_PORT"
       continue
     fi
-
     printf '%s' "$INPUT_PORT"
     return
   done
@@ -146,7 +146,7 @@ show_saved_node_info() {
     -v reset="$RESET" \
     '
       /^===== .* =====$/ { print bold blue $0 reset; next }
-      /^(公网 IP|端口|SNI|UUID|PublicKey|Short ID|配置文件|节点信息文件|查看节点信息|查看服务状态|查看监听端口)：/ { print cyan $0 reset; next }
+      /^(公网 IP|端口|SNI|UUID|PublicKey|Short ID|配置文件|节点信息文件|服务名|查看节点信息|查看服务状态|查看监听端口)：/ { print cyan $0 reset; next }
       /^vless:\/\// { print yellow $0 reset; next }
       /^\/.*$/ { print green $0 reset; next }
       { print }
@@ -163,7 +163,6 @@ show_node_info() {
     return
   fi
   warn "未找到已保存的 Reality 节点信息"
-  warn "请先运行安装脚本完成部署"
   exit 1
 }
 
@@ -174,42 +173,32 @@ choose_action_if_installed() {
   if [ ! -t 0 ] || [ ! -r /dev/tty ]; then
     return
   fi
-
   info "检测到已保存的 Reality 节点信息"
   printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET" >/dev/tty
   printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET" >/dev/tty
   printf '请选择 [默认: 1]: ' >/dev/tty
   read -r ACTION </dev/tty || ACTION=""
-
   case "$ACTION" in
-    ""|1)
-      show_node_info
-      exit 0
-      ;;
-    2)
-      info "继续重新安装，将生成新的 Reality 节点信息"
-      ;;
-    *)
-      error "无效选择，已取消"
-      exit 1
-      ;;
+    ""|1) show_node_info; exit 0 ;;
+    2) ;;
+    *) error "无效选择，已取消"; exit 1 ;;
   esac
 }
 
-stop_existing_xray() {
+stop_existing_service() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-    systemctl stop xray >/dev/null 2>&1 || true
+    systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
   fi
   if command -v rc-service >/dev/null 2>&1; then
-    rc-service xray stop >/dev/null 2>&1 || true
+    rc-service "$SERVICE_NAME" stop >/dev/null 2>&1 || true
   fi
-  pkill -f "/usr/local/bin/xray run -config $CONFIG_FILE" 2>/dev/null || true
+  pkill -f "$PID_HINT" 2>/dev/null || true
 }
 
 write_systemd_service() {
-  cat >/etc/systemd/system/xray.service <<SERVICE
+  cat >/etc/systemd/system/${SERVICE_NAME}.service <<SERVICE
 [Unit]
-Description=Xray Core
+Description=Xray Reality Service
 After=network.target
 
 [Service]
@@ -222,53 +211,47 @@ LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
 SERVICE
-
   systemctl daemon-reload
-  systemctl enable --now xray
-  systemctl restart xray
+  systemctl enable --now "$SERVICE_NAME"
+  systemctl restart "$SERVICE_NAME"
 }
 
 write_openrc_service() {
-  cat >/etc/init.d/xray <<SERVICE
+  cat >/etc/init.d/${SERVICE_NAME} <<SERVICE
 #!/sbin/openrc-run
-name="xray"
-description="Xray Core"
-
+name="$SERVICE_NAME"
+description="Xray Reality Service"
 supervisor="supervise-daemon"
 command="/usr/local/bin/xray"
 command_args="run -config $CONFIG_FILE"
-
 respawn_delay=5
 respawn_max=0
 respawn_period=60
-
 depend() {
     need net
 }
 SERVICE
-
-  chmod +x /etc/init.d/xray
-  rc-update add xray default >/dev/null 2>&1 || true
-  rc-service xray restart || rc-service xray start
+  chmod +x /etc/init.d/${SERVICE_NAME}
+  rc-update add "$SERVICE_NAME" default >/dev/null 2>&1 || true
+  rc-service "$SERVICE_NAME" restart || rc-service "$SERVICE_NAME" start
 }
 
 write_fallback_launcher() {
-  cat >/root/start-xray.sh <<START
+  cat >/root/start-${SERVICE_NAME}.sh <<START
 #!/bin/sh
-pkill -f "/usr/local/bin/xray run -config $CONFIG_FILE" 2>/dev/null || true
-nohup /usr/local/bin/xray run -config $CONFIG_FILE >/var/log/xray.log 2>&1 &
+pkill -f "$PID_HINT" 2>/dev/null || true
+nohup /usr/local/bin/xray run -config $CONFIG_FILE >/var/log/${SERVICE_NAME}.log 2>&1 &
 START
-  chmod +x /root/start-xray.sh
-  /root/start-xray.sh
+  chmod +x /root/start-${SERVICE_NAME}.sh
+  /root/start-${SERVICE_NAME}.sh
 }
 
 show_status() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-    systemctl status xray --no-pager -l || true
+    systemctl status "$SERVICE_NAME" --no-pager -l || true
   elif command -v rc-service >/dev/null 2>&1; then
-    rc-service xray status || true
+    rc-service "$SERVICE_NAME" status || true
   fi
-
   ss -tnlp | grep ":${PORT} " || netstat -tunlp | grep ":${PORT} " || true
 }
 
@@ -287,6 +270,8 @@ show_final_summary() {
   printf '%b%s%b\n' "$GREEN" "$PUBLIC_KEY" "$RESET"
   printf '%b%s%b\n' "$CYAN" "Short ID：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$SHORT_ID" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "服务名：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$SERVICE_NAME" "$RESET"
   echo
   printf '%b%s%b\n' "$BOLD$BLUE" "Reality 链接" "$RESET"
   printf '%b%s%b\n' "$YELLOW" "vless://${UUID}@${PUBLIC_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${PORT}" "$RESET"
@@ -312,14 +297,15 @@ PublicKey：$PUBLIC_KEY
 
 Short ID：$SHORT_ID
 
-链接：
-vless://${UUID}@${PUBLIC_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${PORT}
+服务名：$SERVICE_NAME
+
+链接：vless://${UUID}@${PUBLIC_IP}:${PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${PORT}
 
 ===== 常用命令 =====
 查看节点信息：/root/install-reality.sh info
 
 查看服务状态：
-systemctl status xray --no-pager -l
+systemctl status $SERVICE_NAME --no-pager -l
 
 查看监听端口：ss -tnlp | grep :${PORT}
 
@@ -328,17 +314,12 @@ systemctl status xray --no-pager -l
 节点信息文件：$NODE_INFO_FILE
 $NODE_INFO_COPY
 INFO
-
   cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
 }
 
 case "${1:-}" in
-  info|show|view|--info|--show|--view)
-    show_node_info
-    exit 0
-    ;;
-  install|--install|"")
-    ;;
+  info|show|view|--info|--show|--view) show_node_info; exit 0 ;;
+  install|--install|"") ;;
   *)
     headline "用法："
     printf '%s\n' "  $0              安装或在已安装时显示菜单"
@@ -354,7 +335,7 @@ if [ "${1:-}" != "install" ] && [ "${1:-}" != "--install" ]; then
 fi
 
 install_deps
-stop_existing_xray
+stop_existing_service
 
 PUBLIC_IP="$(detect_ip)"
 PORT="$(prompt_port)"
@@ -367,7 +348,7 @@ unzip -o xray.zip
 install -m 755 xray /usr/local/bin/xray
 
 mkdir -p /usr/local/etc/xray
-touch /var/log/xray-access.log /var/log/xray-error.log
+touch "$ACCESS_LOG" "$ERROR_LOG"
 
 UUID="$(/usr/local/bin/xray uuid)"
 KEYS="$(/usr/local/bin/xray x25519)"
@@ -378,8 +359,8 @@ SHORT_ID="$(openssl rand -hex 8)"
 cat >"$CONFIG_FILE" <<CONFIG
 {
   "log": {
-    "access": "/var/log/xray-access.log",
-    "error": "/var/log/xray-error.log",
+    "access": "$ACCESS_LOG",
+    "error": "$ERROR_LOG",
     "loglevel": "warning"
   },
   "inbounds": [
@@ -403,34 +384,20 @@ cat >"$CONFIG_FILE" <<CONFIG
           "show": false,
           "dest": "${SNI}:443",
           "xver": 0,
-          "serverNames": [
-            "${SNI}"
-          ],
+          "serverNames": ["${SNI}"],
           "privateKey": "${PRIVATE_KEY}",
-          "shortIds": [
-            "${SHORT_ID}"
-          ]
+          "shortIds": ["${SHORT_ID}"]
         }
       },
       "sniffing": {
         "enabled": true,
-        "destOverride": [
-          "http",
-          "tls",
-          "quic"
-        ]
+        "destOverride": ["http", "tls", "quic"]
       }
     }
   ],
   "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "blocked"
-    }
+    { "protocol": "freedom", "tag": "direct" },
+    { "protocol": "blackhole", "tag": "blocked" }
   ]
 }
 CONFIG

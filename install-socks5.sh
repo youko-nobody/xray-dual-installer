@@ -1,9 +1,13 @@
 #!/bin/sh
 set -e
 
-CONFIG_FILE="/usr/local/etc/xray/config.json"
+SERVICE_NAME="xray-socks5"
+CONFIG_FILE="/usr/local/etc/xray/socks5-config.json"
 NODE_INFO_FILE="/usr/local/etc/xray/socks5-node-info.txt"
 NODE_INFO_COPY="/root/socks5-node-info.txt"
+ACCESS_LOG="/var/log/xray-socks5-access.log"
+ERROR_LOG="/var/log/xray-socks5-error.log"
+PID_HINT="run -config $CONFIG_FILE"
 
 if [ -t 1 ]; then
   RED="$(printf '\033[31m')"
@@ -132,19 +136,15 @@ prompt_port() {
     else
       INPUT_PORT=""
     fi
-
     [ -n "$INPUT_PORT" ] || INPUT_PORT="$RECOMMENDED_PORT"
-
     if ! is_valid_port "$INPUT_PORT"; then
       warn "端口无效：$INPUT_PORT"
       continue
     fi
-
     if is_tcp_port_in_use "$INPUT_PORT"; then
       warn "TCP 端口已被占用：$INPUT_PORT"
       continue
     fi
-
     printf '%s' "$INPUT_PORT"
     return
   done
@@ -179,8 +179,9 @@ show_saved_node_info() {
     -v reset="$RESET" \
     '
       /^===== .* =====$/ { print bold blue $0 reset; next }
-      /^(公网 IP|端口|用户名|密码|协议|传输|配置文件|节点信息文件|查看节点信息|查看服务状态|查看监听端口)：/ { print cyan $0 reset; next }
+      /^(公网 IP|端口|用户名|密码|协议|传输|节点名称|配置文件|节点信息文件|服务名|查看节点信息|查看服务状态|查看监听端口)：/ { print cyan $0 reset; next }
       /^socks5:\/\// { print yellow $0 reset; next }
+      /^tg:\/\/socks/ { print yellow $0 reset; next }
       /^\/.*$/ { print green $0 reset; next }
       { print }
     ' "$INFO_FILE"
@@ -206,40 +207,32 @@ choose_action_if_installed() {
   if [ ! -t 0 ] || [ ! -r /dev/tty ]; then
     return
   fi
-
   info "检测到已保存的 SOCKS5 节点信息"
   printf '%b1. 查看节点信息%b\n' "$GREEN" "$RESET" >/dev/tty
   printf '%b2. 重新安装 / 覆盖节点%b\n' "$YELLOW" "$RESET" >/dev/tty
   printf '请选择 [默认: 1]: ' >/dev/tty
   read -r ACTION </dev/tty || ACTION=""
-
   case "$ACTION" in
-    ""|1)
-      show_node_info
-      exit 0
-      ;;
+    ""|1) show_node_info; exit 0 ;;
     2) ;;
-    *)
-      error "无效选择，已取消"
-      exit 1
-      ;;
+    *) error "无效选择，已取消"; exit 1 ;;
   esac
 }
 
-stop_existing_xray() {
+stop_existing_service() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-    systemctl stop xray >/dev/null 2>&1 || true
+    systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
   fi
   if command -v rc-service >/dev/null 2>&1; then
-    rc-service xray stop >/dev/null 2>&1 || true
+    rc-service "$SERVICE_NAME" stop >/dev/null 2>&1 || true
   fi
-  pkill -f "/usr/local/bin/xray run -config $CONFIG_FILE" 2>/dev/null || true
+  pkill -f "$PID_HINT" 2>/dev/null || true
 }
 
 write_systemd_service() {
-  cat >/etc/systemd/system/xray.service <<SERVICE
+  cat >/etc/systemd/system/${SERVICE_NAME}.service <<SERVICE
 [Unit]
-Description=Xray Core
+Description=Xray SOCKS5 Service
 After=network.target
 
 [Service]
@@ -252,53 +245,47 @@ LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
 SERVICE
-
   systemctl daemon-reload
-  systemctl enable --now xray
-  systemctl restart xray
+  systemctl enable --now "$SERVICE_NAME"
+  systemctl restart "$SERVICE_NAME"
 }
 
 write_openrc_service() {
-  cat >/etc/init.d/xray <<SERVICE
+  cat >/etc/init.d/${SERVICE_NAME} <<SERVICE
 #!/sbin/openrc-run
-name="xray"
-description="Xray Core"
-
+name="$SERVICE_NAME"
+description="Xray SOCKS5 Service"
 supervisor="supervise-daemon"
 command="/usr/local/bin/xray"
 command_args="run -config $CONFIG_FILE"
-
 respawn_delay=5
 respawn_max=0
 respawn_period=60
-
 depend() {
     need net
 }
 SERVICE
-
-  chmod +x /etc/init.d/xray
-  rc-update add xray default >/dev/null 2>&1 || true
-  rc-service xray restart || rc-service xray start
+  chmod +x /etc/init.d/${SERVICE_NAME}
+  rc-update add "$SERVICE_NAME" default >/dev/null 2>&1 || true
+  rc-service "$SERVICE_NAME" restart || rc-service "$SERVICE_NAME" start
 }
 
 write_fallback_launcher() {
-  cat >/root/start-xray.sh <<START
+  cat >/root/start-${SERVICE_NAME}.sh <<START
 #!/bin/sh
-pkill -f "/usr/local/bin/xray run -config $CONFIG_FILE" 2>/dev/null || true
-nohup /usr/local/bin/xray run -config $CONFIG_FILE >/var/log/xray.log 2>&1 &
+pkill -f "$PID_HINT" 2>/dev/null || true
+nohup /usr/local/bin/xray run -config $CONFIG_FILE >/var/log/${SERVICE_NAME}.log 2>&1 &
 START
-  chmod +x /root/start-xray.sh
-  /root/start-xray.sh
+  chmod +x /root/start-${SERVICE_NAME}.sh
+  /root/start-${SERVICE_NAME}.sh
 }
 
 show_status() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-    systemctl status xray --no-pager -l || true
+    systemctl status "$SERVICE_NAME" --no-pager -l || true
   elif command -v rc-service >/dev/null 2>&1; then
-    rc-service xray status || true
+    rc-service "$SERVICE_NAME" status || true
   fi
-
   ss -tnlp | grep ":${PORT} " || netstat -tunlp | grep ":${PORT} " || true
 }
 
@@ -319,6 +306,8 @@ show_final_summary() {
   printf '%b%s%b\n' "$GREEN" "TCP + UDP" "$RESET"
   printf '%b%s%b\n' "$CYAN" "节点名称：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$NODE_NAME" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "服务名：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$SERVICE_NAME" "$RESET"
   echo
   printf '%b%s%b\n' "$BOLD$BLUE" "原始分享链接" "$RESET"
   printf '%b%s%b\n' "$YELLOW" "socks5://${USERNAME}:${PASSWORD}@${PUBLIC_IP}:${PORT}#${NODE_NAME}" "$RESET"
@@ -349,6 +338,8 @@ write_node_info() {
 
 节点名称：$NODE_NAME
 
+服务名：$SERVICE_NAME
+
 原始分享链接：socks5://${USERNAME}:${PASSWORD}@${PUBLIC_IP}:${PORT}#${NODE_NAME}
 
 Telegram 识别链接：tg://socks?server=${PUBLIC_IP}&port=${PORT}&user=${USERNAME}&pass=${PASSWORD}
@@ -357,7 +348,7 @@ Telegram 识别链接：tg://socks?server=${PUBLIC_IP}&port=${PORT}&user=${USERN
 查看节点信息：/root/install-socks5.sh info
 
 查看服务状态：
-systemctl status xray --no-pager -l
+systemctl status $SERVICE_NAME --no-pager -l
 
 查看监听端口：ss -tnlp | grep :${PORT}
 
@@ -366,17 +357,12 @@ systemctl status xray --no-pager -l
 节点信息文件：$NODE_INFO_FILE
 $NODE_INFO_COPY
 INFO
-
   cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
 }
 
 case "${1:-}" in
-  info|show|view|--info|--show|--view)
-    show_node_info
-    exit 0
-    ;;
-  install|--install|"")
-    ;;
+  info|show|view|--info|--show|--view) show_node_info; exit 0 ;;
+  install|--install|"") ;;
   *)
     headline "用法："
     printf '%s\n' "  $0              安装或在已安装时显示菜单"
@@ -392,7 +378,7 @@ if [ "${1:-}" != "install" ] && [ "${1:-}" != "--install" ]; then
 fi
 
 install_deps
-stop_existing_xray
+stop_existing_service
 
 PUBLIC_IP="$(detect_ip)"
 PORT="$(prompt_port)"
@@ -410,13 +396,13 @@ unzip -o xray.zip
 install -m 755 xray /usr/local/bin/xray
 
 mkdir -p /usr/local/etc/xray
-touch /var/log/xray-access.log /var/log/xray-error.log
+touch "$ACCESS_LOG" "$ERROR_LOG"
 
 cat >"$CONFIG_FILE" <<CONFIG
 {
   "log": {
-    "access": "/var/log/xray-access.log",
-    "error": "/var/log/xray-error.log",
+    "access": "$ACCESS_LOG",
+    "error": "$ERROR_LOG",
     "loglevel": "warning"
   },
   "inbounds": [
@@ -436,22 +422,13 @@ cat >"$CONFIG_FILE" <<CONFIG
       },
       "sniffing": {
         "enabled": true,
-        "destOverride": [
-          "http",
-          "tls"
-        ]
+        "destOverride": ["http", "tls"]
       }
     }
   ],
   "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "blocked"
-    }
+    { "protocol": "freedom", "tag": "direct" },
+    { "protocol": "blackhole", "tag": "blocked" }
   ]
 }
 CONFIG

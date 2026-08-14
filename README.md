@@ -112,6 +112,27 @@ wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/
 | SOCKS5 | `SOCKS5 Username/Password` | TCP + UDP | 通用性高，脚本会输出原始链接和 Telegram 识别链接 |
 | MTProto | `Telegram MTProto Proxy` | TCP | 主要用于 Telegram |
 
+## 独立部署说明
+
+现在 `Reality` 和 `SOCKS5` 已经拆成独立服务，可以在同一台机器上同时存在，不会再互相覆盖。
+
+对应关系如下：
+
+| 节点 | 独立服务名 | 独立配置文件 |
+| --- | --- | --- |
+| Reality | `xray-reality` | `/usr/local/etc/xray/reality-config.json` |
+| SOCKS5 | `xray-socks5` | `/usr/local/etc/xray/socks5-config.json` |
+
+也就是说，你可以一台机器同时跑：
+
+- `VLESS + Reality`
+- `SOCKS5`
+- `HY2`
+- `Snell`
+- `MTProto`
+
+其中只有 `VLESS + Reality + VLESS + WS` 双节点脚本，仍然是它自己单独占用一套 Xray 配置。
+
 ## 功能说明
 
 | 功能 | 说明 |
