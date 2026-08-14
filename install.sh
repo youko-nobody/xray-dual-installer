@@ -70,6 +70,8 @@ show_saved_overview() {
   printf '%b双节点%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/node-info.txt")"
   printf '%bHY2%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/hysteria/node-info.txt")"
   printf '%bSnell v6%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/snell/node-info.txt")"
+  printf '%bSOCKS5%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/socks5-node-info.txt")"
+  printf '%bMTProto%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/mtproto-proxy/node-info.txt")"
   echo
 }
 
@@ -93,11 +95,13 @@ show_menu() {
   printf '%b2.%b VLESS + Reality + VLESS + WS 双节点\n' "$GREEN" "$RESET"
   printf '%b3.%b Hysteria2 / HY2 节点\n' "$GREEN" "$RESET"
   printf '%b4.%b Snell v6 节点\n' "$GREEN" "$RESET"
-  printf '%b5.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
-  printf '%b6.%b 卸载节点\n' "$YELLOW" "$RESET"
+  printf '%b5.%b SOCKS5 节点\n' "$GREEN" "$RESET"
+  printf '%b6.%b MTProto 节点\n' "$GREEN" "$RESET"
+  printf '%b7.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
+  printf '%b8.%b 卸载节点\n' "$YELLOW" "$RESET"
   printf '%b0.%b 退出\n' "$RED" "$RESET"
   echo
-  warn "提示：选 1 或 2 会覆盖当前 Xray 配置；HY2 和 Snell 可以与 Xray 共存。"
+  warn "提示：Reality、双节点、SOCKS5 会覆盖当前 Xray 配置；HY2、Snell、MTProto 可与 Xray 共存。"
 }
 
 show_info_menu() {
@@ -108,42 +112,33 @@ show_info_menu() {
   printf '%b2.%b 查看 Xray 双节点\n' "$GREEN" "$RESET"
   printf '%b3.%b 查看 HY2 节点\n' "$GREEN" "$RESET"
   printf '%b4.%b 查看 Snell v6 节点\n' "$GREEN" "$RESET"
-  printf '%b5.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
+  printf '%b5.%b 查看 SOCKS5 节点\n' "$GREEN" "$RESET"
+  printf '%b6.%b 查看 MTProto 节点\n' "$GREEN" "$RESET"
+  printf '%b7.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
   printf '%b0.%b 返回\n' "$YELLOW" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
   read -r INFO_CHOICE || INFO_CHOICE=""
   case "$INFO_CHOICE" in
-    1)
-      ensure_script "install-reality.sh" "/root/install-reality.sh"
-      /root/install-reality.sh info
-      ;;
-    2)
-      ensure_script "install-xray-dual-auto.sh" "/root/install-xray-dual-auto.sh"
-      /root/install-xray-dual-auto.sh info
-      ;;
-    3)
-      ensure_script "install-hy2.sh" "/root/install-hy2.sh"
-      /root/install-hy2.sh info
-      ;;
-    4)
-      ensure_script "install-snell.sh" "/root/install-snell.sh"
-      /root/install-snell.sh info
-      ;;
-    5)
+    1) ensure_script "install-reality.sh" "/root/install-reality.sh"; /root/install-reality.sh info ;;
+    2) ensure_script "install-xray-dual-auto.sh" "/root/install-xray-dual-auto.sh"; /root/install-xray-dual-auto.sh info ;;
+    3) ensure_script "install-hy2.sh" "/root/install-hy2.sh"; /root/install-hy2.sh info ;;
+    4) ensure_script "install-snell.sh" "/root/install-snell.sh"; /root/install-snell.sh info ;;
+    5) ensure_script "install-socks5.sh" "/root/install-socks5.sh"; /root/install-socks5.sh info ;;
+    6) ensure_script "install-mtproto.sh" "/root/install-mtproto.sh"; /root/install-mtproto.sh info ;;
+    7)
       show_saved_overview
       echo
-      printf '%bReality%b\n' "$BOLD$GREEN" "$RESET"
-      [ -f "/usr/local/etc/xray/reality-node-info.txt" ] && cat /usr/local/etc/xray/reality-node-info.txt || true
-      echo
-      printf '%b双节点%b\n' "$BOLD$GREEN" "$RESET"
-      [ -f "/usr/local/etc/xray/node-info.txt" ] && cat /usr/local/etc/xray/node-info.txt || true
-      echo
-      printf '%bHY2%b\n' "$BOLD$GREEN" "$RESET"
-      [ -f "/etc/hysteria/node-info.txt" ] && cat /etc/hysteria/node-info.txt || true
-      echo
-      printf '%bSnell v6%b\n' "$BOLD$GREEN" "$RESET"
-      [ -f "/etc/snell/node-info.txt" ] && cat /etc/snell/node-info.txt || true
+      for file in \
+        "/usr/local/etc/xray/reality-node-info.txt" \
+        "/usr/local/etc/xray/node-info.txt" \
+        "/etc/hysteria/node-info.txt" \
+        "/etc/snell/node-info.txt" \
+        "/usr/local/etc/xray/socks5-node-info.txt" \
+        "/etc/mtproto-proxy/node-info.txt"
+      do
+        [ -f "$file" ] && cat "$file" && echo
+      done
       ;;
     ""|0) return ;;
     *) error "无效选择" ;;
@@ -157,7 +152,9 @@ show_uninstall_menu() {
   printf '%b2.%b 卸载 Xray 双节点\n' "$YELLOW" "$RESET"
   printf '%b3.%b 卸载 HY2 节点\n' "$YELLOW" "$RESET"
   printf '%b4.%b 卸载 Snell v6 节点\n' "$YELLOW" "$RESET"
-  printf '%b5.%b 卸载 Xray + HY2 + Snell 全部节点\n' "$RED" "$RESET"
+  printf '%b5.%b 卸载 SOCKS5 节点\n' "$YELLOW" "$RESET"
+  printf '%b6.%b 卸载 MTProto 节点\n' "$YELLOW" "$RESET"
+  printf '%b7.%b 卸载 Xray + HY2 + Snell + SOCKS5 + MTProto 全部节点\n' "$RED" "$RESET"
   printf '%b0.%b 返回\n' "$CYAN" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -167,14 +164,18 @@ show_uninstall_menu() {
     2) run_remote_script "uninstall-xray-dual.sh" "/root/uninstall-xray-dual.sh" ;;
     3) run_remote_script "uninstall-hy2.sh" "/root/uninstall-hy2.sh" ;;
     4) run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh" ;;
-    5)
-      warn "即将卸载 Xray、HY2 和 Snell 相关节点。"
+    5) run_remote_script "uninstall-socks5.sh" "/root/uninstall-socks5.sh" ;;
+    6) run_remote_script "uninstall-mtproto.sh" "/root/uninstall-mtproto.sh" ;;
+    7)
+      warn "即将卸载 Xray、HY2、Snell、SOCKS5、MTProto 相关节点。"
       printf '确认卸载全部？输入 yes 继续: '
       read -r CONFIRM || CONFIRM=""
       if [ "$CONFIRM" = "yes" ]; then
         run_remote_script "uninstall-xray-dual.sh" "/root/uninstall-xray-dual.sh"
         run_remote_script "uninstall-hy2.sh" "/root/uninstall-hy2.sh"
         run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh"
+        run_remote_script "uninstall-socks5.sh" "/root/uninstall-socks5.sh"
+        run_remote_script "uninstall-mtproto.sh" "/root/uninstall-mtproto.sh"
       else
         warn "已取消卸载。"
       fi
@@ -191,6 +192,8 @@ main() {
     dual) run_remote_script "install-xray-dual-auto.sh" "/root/install-xray-dual-auto.sh" install; exit 0 ;;
     hy2) run_remote_script "install-hy2.sh" "/root/install-hy2.sh" install; exit 0 ;;
     snell) run_remote_script "install-snell.sh" "/root/install-snell.sh" install; exit 0 ;;
+    socks5) run_remote_script "install-socks5.sh" "/root/install-socks5.sh" install; exit 0 ;;
+    mtproto) run_remote_script "install-mtproto.sh" "/root/install-mtproto.sh" install; exit 0 ;;
     info) show_info_menu; exit 0 ;;
     uninstall) show_uninstall_menu; exit 0 ;;
     ""|menu) ;;
@@ -201,6 +204,8 @@ main() {
       printf '%s\n' "  $0 dual        直接部署 Xray 双节点"
       printf '%s\n' "  $0 hy2         直接部署 HY2"
       printf '%s\n' "  $0 snell       直接部署 Snell v6"
+      printf '%s\n' "  $0 socks5      直接部署 SOCKS5"
+      printf '%s\n' "  $0 mtproto     直接部署 MTProto"
       printf '%s\n' "  $0 info        查看节点信息菜单"
       printf '%s\n' "  $0 uninstall   卸载菜单"
       exit 1
@@ -216,8 +221,10 @@ main() {
       2) run_remote_script "install-xray-dual-auto.sh" "/root/install-xray-dual-auto.sh" install; pause_hint; exit 0 ;;
       3) run_remote_script "install-hy2.sh" "/root/install-hy2.sh" install; pause_hint; exit 0 ;;
       4) run_remote_script "install-snell.sh" "/root/install-snell.sh" install; pause_hint; exit 0 ;;
-      5) show_info_menu ;;
-      6) show_uninstall_menu ;;
+      5) run_remote_script "install-socks5.sh" "/root/install-socks5.sh" install; pause_hint; exit 0 ;;
+      6) run_remote_script "install-mtproto.sh" "/root/install-mtproto.sh" install; pause_hint; exit 0 ;;
+      7) show_info_menu ;;
+      8) show_uninstall_menu ;;
       0) success "已退出。"; exit 0 ;;
       *) error "无效选择，请重新输入。" ;;
     esac
