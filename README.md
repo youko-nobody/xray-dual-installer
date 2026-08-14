@@ -109,7 +109,7 @@ wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/
 | 双节点 | `VLESS + TCP + REALITY + XTLS Vision` + `VLESS + WS` | TCP / WS | 同时提供 Reality 和 WS |
 | HY2 | `Hysteria2` | UDP | 自签证书方案 |
 | Snell | `Snell v6` | TCP | 主要适合 `Surge` |
-| SOCKS5 | `SOCKS5 Username/Password` | TCP + UDP | 通用性高 |
+| SOCKS5 | `SOCKS5 Username/Password` | TCP + UDP | 通用性高，脚本会输出原始链接和 Telegram 识别链接 |
 | MTProto | `Telegram MTProto Proxy` | TCP | 主要用于 Telegram |
 
 ## 功能说明

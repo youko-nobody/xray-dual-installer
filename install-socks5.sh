@@ -317,9 +317,14 @@ show_final_summary() {
   printf '%b%s%b\n' "$GREEN" "SOCKS5" "$RESET"
   printf '%b%s%b\n' "$CYAN" "传输：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "TCP + UDP" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "节点名称：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$NODE_NAME" "$RESET"
   echo
-  printf '%b%s%b\n' "$BOLD$BLUE" "分享链接" "$RESET"
-  printf '%b%s%b\n' "$YELLOW" "socks5://${USERNAME}:${PASSWORD}@${PUBLIC_IP}:${PORT}" "$RESET"
+  printf '%b%s%b\n' "$BOLD$BLUE" "原始分享链接" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "socks5://${USERNAME}:${PASSWORD}@${PUBLIC_IP}:${PORT}#${NODE_NAME}" "$RESET"
+  echo
+  printf '%b%s%b\n' "$BOLD$BLUE" "Telegram 识别链接" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "tg://socks?server=${PUBLIC_IP}&port=${PORT}&user=${USERNAME}&pass=${PASSWORD}" "$RESET"
   echo
   printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
@@ -342,7 +347,11 @@ write_node_info() {
 
 传输：TCP + UDP
 
-分享链接：socks5://${USERNAME}:${PASSWORD}@${PUBLIC_IP}:${PORT}
+节点名称：$NODE_NAME
+
+原始分享链接：socks5://${USERNAME}:${PASSWORD}@${PUBLIC_IP}:${PORT}#${NODE_NAME}
+
+Telegram 识别链接：tg://socks?server=${PUBLIC_IP}&port=${PORT}&user=${USERNAME}&pass=${PASSWORD}
 
 ===== 常用命令 =====
 查看节点信息：/root/install-socks5.sh info
@@ -391,6 +400,7 @@ DEFAULT_USERNAME="user$(random_string 6)"
 DEFAULT_PASSWORD="$(random_string 16)"
 USERNAME="$(prompt_value "SOCKS5 用户名" "$DEFAULT_USERNAME")"
 PASSWORD="$(prompt_value "SOCKS5 密码" "$DEFAULT_PASSWORD")"
+NODE_NAME="SOCKS5-${PUBLIC_IP}-${PORT}"
 XRAY_ZIP="$(detect_xray_zip)"
 
 cd /root
