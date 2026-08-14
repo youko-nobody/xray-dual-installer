@@ -241,11 +241,18 @@ wget -O /root/uninstall-mtproto.sh https://raw.githubusercontent.com/youko-nobod
 | 项目 | 默认值 |
 | --- | --- |
 | 端口 | 回车使用随机推荐端口 |
-| Secret | 自动生成 `dd` 前缀随机填充 Secret |
+| 服务端 Secret | 自动生成 32 位十六进制 |
+| 客户端 Secret | 自动在服务端 Secret 前加 `dd` 前缀 |
 
 ## MTProto 说明
 
 当前脚本使用 Telegram 官方 [MTProxy](https://github.com/TelegramMessenger/MTProxy) 源码构建。
+
+注意：
+
+- 服务端启动参数 `-S` 使用的是纯 32 位十六进制 secret
+- Telegram 客户端导入链接使用的是带 `dd` 前缀的 secret
+- 也就是：服务端和客户端看到的 secret 不完全一样，这是正常的
 
 输出的链接格式为：
 

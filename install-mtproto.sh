@@ -146,7 +146,7 @@ prompt_port() {
 }
 
 make_secret() {
-  printf 'dd%s' "$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n'
 }
 
 show_saved_node_info() {
@@ -314,6 +314,8 @@ show_final_summary() {
   printf '%b%s%b\n' "$CYAN" "端口：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$PORT" "$RESET"
   printf '%b%s%b\n' "$CYAN" "Secret：" "$RESET"
+  printf '%b%s%b\n' "$GREEN" "$CLIENT_SECRET" "$RESET"
+  printf '%b%s%b\n' "$CYAN" "服务端 Secret：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$SECRET" "$RESET"
   printf '%b%s%b\n' "$CYAN" "协议：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "MTProto Proxy" "$RESET"
@@ -323,8 +325,8 @@ show_final_summary() {
   printf '%b%s%b\n' "$GREEN" "dd 随机填充" "$RESET"
   echo
   printf '%b%s%b\n' "$BOLD$BLUE" "Telegram 链接" "$RESET"
-  printf '%b%s%b\n' "$YELLOW" "tg://proxy?server=${PUBLIC_IP}&port=${PORT}&secret=${SECRET}" "$RESET"
-  printf '%b%s%b\n' "$YELLOW" "https://t.me/proxy?server=${PUBLIC_IP}&port=${PORT}&secret=${SECRET}" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "tg://proxy?server=${PUBLIC_IP}&port=${PORT}&secret=${CLIENT_SECRET}" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "https://t.me/proxy?server=${PUBLIC_IP}&port=${PORT}&secret=${CLIENT_SECRET}" "$RESET"
   echo
   printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
@@ -339,7 +341,9 @@ write_node_info() {
 
 端口：$PORT
 
-Secret：$SECRET
+客户端 Secret：$CLIENT_SECRET
+
+服务端 Secret：$SECRET
 
 协议：MTProto Proxy
 
@@ -348,8 +352,8 @@ Secret：$SECRET
 模式：dd 随机填充
 
 Telegram 链接：
-tg://proxy?server=${PUBLIC_IP}&port=${PORT}&secret=${SECRET}
-https://t.me/proxy?server=${PUBLIC_IP}&port=${PORT}&secret=${SECRET}
+tg://proxy?server=${PUBLIC_IP}&port=${PORT}&secret=${CLIENT_SECRET}
+https://t.me/proxy?server=${PUBLIC_IP}&port=${PORT}&secret=${CLIENT_SECRET}
 
 ===== 常用命令 =====
 查看节点信息：/root/install-mtproto.sh info
@@ -396,6 +400,7 @@ PUBLIC_IP="$(detect_ip)"
 PORT="$(prompt_port)"
 STATS_PORT="$(random_local_port)"
 SECRET="$(make_secret)"
+CLIENT_SECRET="dd${SECRET}"
 
 download_and_build_mtproto
 prepare_runtime_files
