@@ -6,6 +6,8 @@ NODE_INFO_FILE="/etc/mtproto-proxy/node-info.txt"
 NODE_INFO_COPY="/root/mtproto-node-info.txt"
 BUILD_DIR="/usr/local/src/MTProxy"
 SERVICE_NAME="mtproxy"
+SYSTEMD_SERVICE_FILE="/etc/systemd/system/mtproxy.service"
+OPENRC_SERVICE_FILE="/etc/init.d/mtproxy"
 
 if [ -t 1 ]; then
   RED="$(printf '\033[31m')"
@@ -207,6 +209,14 @@ choose_action_if_installed() {
   esac
 }
 
+cleanup_old_state() {
+  rm -f "$NODE_INFO_FILE"
+  rm -f "$NODE_INFO_COPY"
+  rm -f "$CONFIG_DIR/proxy-secret"
+  rm -f "$CONFIG_DIR/proxy-multi.conf"
+  rm -f /root/start-mtproto.sh
+}
+
 stop_existing_mtproto() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
     systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -395,6 +405,7 @@ fi
 
 install_deps
 stop_existing_mtproto
+cleanup_old_state
 
 PUBLIC_IP="$(detect_ip)"
 PORT="$(prompt_port)"

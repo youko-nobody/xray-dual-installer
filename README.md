@@ -253,6 +253,7 @@ wget -O /root/uninstall-mtproto.sh https://raw.githubusercontent.com/youko-nobod
 - 服务端启动参数 `-S` 使用的是纯 32 位十六进制 secret
 - Telegram 客户端导入链接使用的是带 `dd` 前缀的 secret
 - 也就是：服务端和客户端看到的 secret 不完全一样，这是正常的
+- 重新安装 MTProto 时，脚本会先清理旧的节点信息和旧运行残留，再生成新的配置
 
 输出的链接格式为：
 
