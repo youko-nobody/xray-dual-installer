@@ -72,6 +72,7 @@ show_saved_overview() {
   printf '%bSnell v6%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/snell/node-info.txt")"
   printf '%bSOCKS5%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/socks5-node-info.txt")"
   printf '%bMTProto%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/mtproto-proxy/node-info.txt")"
+  printf '%bAnyTLS%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/sing-box-anytls/node-info.txt")"
   echo
 }
 
@@ -97,11 +98,12 @@ show_menu() {
   printf '%b4.%b Snell v6 节点\n' "$GREEN" "$RESET"
   printf '%b5.%b SOCKS5 节点\n' "$GREEN" "$RESET"
   printf '%b6.%b MTProto 节点\n' "$GREEN" "$RESET"
-  printf '%b7.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
-  printf '%b8.%b 卸载节点\n' "$YELLOW" "$RESET"
+  printf '%b7.%b AnyTLS 节点\n' "$GREEN" "$RESET"
+  printf '%b8.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
+  printf '%b9.%b 卸载节点\n' "$YELLOW" "$RESET"
   printf '%b0.%b 退出\n' "$RED" "$RESET"
   echo
-  warn "提示：Reality 与 SOCKS5 现已可独立共存；双节点仍会占用自己的 Xray 配置。"
+  warn "提示：Reality、SOCKS5 与 AnyTLS 可独立共存；双节点仍会占用自己的 Xray 配置。"
 }
 
 show_info_menu() {
@@ -114,7 +116,8 @@ show_info_menu() {
   printf '%b4.%b 查看 Snell v6 节点\n' "$GREEN" "$RESET"
   printf '%b5.%b 查看 SOCKS5 节点\n' "$GREEN" "$RESET"
   printf '%b6.%b 查看 MTProto 节点\n' "$GREEN" "$RESET"
-  printf '%b7.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
+  printf '%b7.%b 查看 AnyTLS 节点\n' "$GREEN" "$RESET"
+  printf '%b8.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
   printf '%b0.%b 返回\n' "$YELLOW" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -126,7 +129,8 @@ show_info_menu() {
     4) ensure_script "install-snell.sh" "/root/install-snell.sh"; /root/install-snell.sh info ;;
     5) ensure_script "install-socks5.sh" "/root/install-socks5.sh"; /root/install-socks5.sh info ;;
     6) ensure_script "install-mtproto.sh" "/root/install-mtproto.sh"; /root/install-mtproto.sh info ;;
-    7)
+    7) ensure_script "install-anytls.sh" "/root/install-anytls.sh"; /root/install-anytls.sh info ;;
+    8)
       show_saved_overview
       echo
       for file in \
@@ -135,7 +139,8 @@ show_info_menu() {
         "/etc/hysteria/node-info.txt" \
         "/etc/snell/node-info.txt" \
         "/usr/local/etc/xray/socks5-node-info.txt" \
-        "/etc/mtproto-proxy/node-info.txt"
+        "/etc/mtproto-proxy/node-info.txt" \
+        "/etc/sing-box-anytls/node-info.txt"
       do
         [ -f "$file" ] && cat "$file" && echo
       done
@@ -154,7 +159,8 @@ show_uninstall_menu() {
   printf '%b4.%b 卸载 Snell v6 节点\n' "$YELLOW" "$RESET"
   printf '%b5.%b 卸载 SOCKS5 节点\n' "$YELLOW" "$RESET"
   printf '%b6.%b 卸载 MTProto 节点\n' "$YELLOW" "$RESET"
-  printf '%b7.%b 卸载 Xray + HY2 + Snell + SOCKS5 + MTProto 全部节点\n' "$RED" "$RESET"
+  printf '%b7.%b 卸载 AnyTLS 节点\n' "$YELLOW" "$RESET"
+  printf '%b8.%b 卸载 Xray + HY2 + Snell + SOCKS5 + MTProto + AnyTLS 全部节点\n' "$RED" "$RESET"
   printf '%b0.%b 返回\n' "$CYAN" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -166,8 +172,9 @@ show_uninstall_menu() {
     4) run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh" ;;
     5) run_remote_script "uninstall-socks5.sh" "/root/uninstall-socks5.sh" ;;
     6) run_remote_script "uninstall-mtproto.sh" "/root/uninstall-mtproto.sh" ;;
-    7)
-      warn "即将卸载 Xray、HY2、Snell、SOCKS5、MTProto 相关节点。"
+    7) run_remote_script "uninstall-anytls.sh" "/root/uninstall-anytls.sh" ;;
+    8)
+      warn "即将卸载 Xray、HY2、Snell、SOCKS5、MTProto、AnyTLS 相关节点。"
       printf '确认卸载全部？输入 yes 继续: '
       read -r CONFIRM || CONFIRM=""
       if [ "$CONFIRM" = "yes" ]; then
@@ -176,6 +183,7 @@ show_uninstall_menu() {
         run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh"
         run_remote_script "uninstall-socks5.sh" "/root/uninstall-socks5.sh"
         run_remote_script "uninstall-mtproto.sh" "/root/uninstall-mtproto.sh"
+        run_remote_script "uninstall-anytls.sh" "/root/uninstall-anytls.sh"
       else
         warn "已取消卸载。"
       fi
@@ -194,6 +202,7 @@ main() {
     snell) run_remote_script "install-snell.sh" "/root/install-snell.sh" install; exit 0 ;;
     socks5) run_remote_script "install-socks5.sh" "/root/install-socks5.sh" install; exit 0 ;;
     mtproto) run_remote_script "install-mtproto.sh" "/root/install-mtproto.sh" install; exit 0 ;;
+    anytls) run_remote_script "install-anytls.sh" "/root/install-anytls.sh" install; exit 0 ;;
     info) show_info_menu; exit 0 ;;
     uninstall) show_uninstall_menu; exit 0 ;;
     ""|menu) ;;
@@ -206,6 +215,7 @@ main() {
       printf '%s\n' "  $0 snell       直接部署 Snell v6"
       printf '%s\n' "  $0 socks5      直接部署 SOCKS5"
       printf '%s\n' "  $0 mtproto     直接部署 MTProto"
+      printf '%s\n' "  $0 anytls      直接部署 AnyTLS"
       printf '%s\n' "  $0 info        查看节点信息菜单"
       printf '%s\n' "  $0 uninstall   卸载菜单"
       exit 1
@@ -223,8 +233,9 @@ main() {
       4) run_remote_script "install-snell.sh" "/root/install-snell.sh" install; pause_hint; exit 0 ;;
       5) run_remote_script "install-socks5.sh" "/root/install-socks5.sh" install; pause_hint; exit 0 ;;
       6) run_remote_script "install-mtproto.sh" "/root/install-mtproto.sh" install; pause_hint; exit 0 ;;
-      7) show_info_menu ;;
-      8) show_uninstall_menu ;;
+      7) run_remote_script "install-anytls.sh" "/root/install-anytls.sh" install; pause_hint; exit 0 ;;
+      8) show_info_menu ;;
+      9) show_uninstall_menu ;;
       0) success "已退出。"; exit 0 ;;
       *) error "无效选择，请重新输入。" ;;
     esac

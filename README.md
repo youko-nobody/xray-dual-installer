@@ -1,4 +1,4 @@
-# Xray / HY2 / Snell / SOCKS5 / MTProto 一键脚本
+# Xray / HY2 / Snell / SOCKS5 / MTProto / AnyTLS 一键脚本
 
 ![Shell](https://img.shields.io/badge/Shell-sh-4EAA25?style=for-the-badge)
 ![System](https://img.shields.io/badge/System-Debian%20%7C%20Ubuntu%20%7C%20Alpine-2563eb?style=for-the-badge)
@@ -14,6 +14,7 @@
 - `Snell v6`
 - `SOCKS5`
 - `MTProto`
+- `AnyTLS`
 
 脚本会自动安装依赖、自动获取公网 IP、自动写入服务自启，并把节点信息保存到 VPS 本机，后续可以随时用 `info` 查看。
 
@@ -46,8 +47,9 @@ curl -L -o /root/install.sh https://raw.githubusercontent.com/youko-nobody/xray-
 4. Snell v6 节点
 5. SOCKS5 节点
 6. MTProto 节点
-7. 查看已保存的节点信息
-8. 卸载节点
+7. AnyTLS 节点
+8. 查看已保存的节点信息
+9. 卸载节点
 ```
 
 也支持直接指定类型：
@@ -59,6 +61,7 @@ curl -L -o /root/install.sh https://raw.githubusercontent.com/youko-nobody/xray-
 /root/install.sh snell
 /root/install.sh socks5
 /root/install.sh mtproto
+/root/install.sh anytls
 /root/install.sh info
 /root/install.sh uninstall
 ```
@@ -101,6 +104,12 @@ wget -O /root/install-socks5.sh https://raw.githubusercontent.com/youko-nobody/x
 wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-mtproto.sh && chmod +x /root/install-mtproto.sh && /root/install-mtproto.sh
 ```
 
+### 7. AnyTLS
+
+```sh
+wget -O /root/install-anytls.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-anytls.sh && chmod +x /root/install-anytls.sh && /root/install-anytls.sh
+```
+
 ## 协议说明
 
 | 类型 | 完整名称 | 传输 | 说明 |
@@ -111,10 +120,14 @@ wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/
 | Snell | `Snell v6` | TCP | 主要适合 `Surge` |
 | SOCKS5 | `SOCKS5 Username/Password` | TCP + UDP | 通用性高，脚本会输出原始链接和 Telegram 识别链接 |
 | MTProto | `Telegram MTProto Proxy` | TCP | 主要用于 Telegram |
+| AnyTLS | `AnyTLS over TLS` | TCP，支持 UDP over TCP | 使用独立 sing-box 服务，不依赖 Xray-core |
+
+> [!IMPORTANT]
+> Xray-core 当前不支持 AnyTLS。本项目通过独立的 `sing-box-anytls` 服务部署 AnyTLS，因此它可以与现有 Xray 节点共存。
 
 ## 独立部署说明
 
-现在 `Reality` 和 `SOCKS5` 已经拆成独立服务，可以在同一台机器上同时存在，不会再互相覆盖。
+现在 `Reality`、`SOCKS5` 和 `AnyTLS` 都使用独立服务，可以在同一台机器上同时存在，不会互相覆盖。
 
 对应关系如下：
 
@@ -122,6 +135,7 @@ wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/
 | --- | --- | --- |
 | Reality | `xray-reality` | `/usr/local/etc/xray/reality-config.json` |
 | SOCKS5 | `xray-socks5` | `/usr/local/etc/xray/socks5-config.json` |
+| AnyTLS | `sing-box-anytls` | `/etc/sing-box-anytls/config.json` |
 
 也就是说，你可以一台机器同时跑：
 
@@ -130,6 +144,7 @@ wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/
 - `HY2`
 - `Snell`
 - `MTProto`
+- `AnyTLS`
 
 其中只有 `VLESS + Reality + VLESS + WS` 双节点脚本，仍然是它自己单独占用一套 Xray 配置。
 
@@ -162,6 +177,7 @@ wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/
 /root/install-snell.sh info
 /root/install-socks5.sh info
 /root/install-mtproto.sh info
+/root/install-anytls.sh info
 ```
 
 ## 节点信息保存位置
@@ -174,6 +190,7 @@ wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/
 | Snell v6 | `/etc/snell/node-info.txt` |
 | SOCKS5 | `/usr/local/etc/xray/socks5-node-info.txt` |
 | MTProto | `/etc/mtproto-proxy/node-info.txt` |
+| AnyTLS | `/etc/sing-box-anytls/node-info.txt` |
 
 ## 卸载命令
 
@@ -192,6 +209,7 @@ wget -O /root/uninstall-hy2.sh https://raw.githubusercontent.com/youko-nobody/xr
 wget -O /root/uninstall-snell.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-snell.sh && chmod +x /root/uninstall-snell.sh && /root/uninstall-snell.sh
 wget -O /root/uninstall-socks5.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-socks5.sh && chmod +x /root/uninstall-socks5.sh && /root/uninstall-socks5.sh
 wget -O /root/uninstall-mtproto.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-mtproto.sh && chmod +x /root/uninstall-mtproto.sh && /root/uninstall-mtproto.sh
+wget -O /root/uninstall-anytls.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-anytls.sh && chmod +x /root/uninstall-anytls.sh && /root/uninstall-anytls.sh
 ```
 
 ## 默认配置
@@ -244,6 +262,15 @@ wget -O /root/uninstall-mtproto.sh https://raw.githubusercontent.com/youko-nobod
 | 服务端 Secret | 自动生成 32 位十六进制 |
 | 客户端 Secret | 自动在服务端 Secret 前加 `dd` 前缀 |
 
+### AnyTLS
+
+| 项目 | 默认值 |
+| --- | --- |
+| 端口 | `443/TCP` 空闲时推荐 443，否则推荐随机端口 |
+| 密码 | 自动生成 32 位十六进制，也可手动输入 |
+| 内核 | 最新稳定版 `sing-box`，最低要求 `1.14` |
+| 证书 | 自动 ACME、已有证书或自签证书 |
+
 ## MTProto 说明
 
 当前脚本使用 Telegram 官方 [MTProxy](https://github.com/TelegramMessenger/MTProxy) 源码构建。
@@ -262,6 +289,30 @@ tg://proxy?server=你的IP&port=端口&secret=你的Secret
 https://t.me/proxy?server=你的IP&port=端口&secret=你的Secret
 ```
 
+## AnyTLS 证书与客户端说明
+
+安装时可以选择：
+
+1. 自动申请 ACME 证书：推荐，需要域名直接解析到当前 VPS，并确保 TCP 80 未被占用。
+2. 使用已有证书：输入证书完整链和私钥路径，脚本会检查格式、有效期及私钥是否匹配。
+3. 生成自签证书：不需要域名，但客户端必须开启 `insecure` / 跳过证书验证。
+
+> [!WARNING]
+> 自签模式生成的分享链接包含 `insecure=1`。这适合快速测试，但不能防止 TLS 中间人攻击，长期使用建议改为可信证书。
+
+常见客户端兼容情况：
+
+- sing-box `1.12+`
+- Mihomo 新版本
+- Shadowrocket `2.2.65+`
+- 新版 Stash、Loon
+
+仅包含 Xray-core 的客户端不能连接 AnyTLS。分享链接采用 AnyTLS 官方 URI 格式：
+
+```text
+anytls://密码@服务器地址:端口/?sni=域名#节点名称
+```
+
 ## 端口放行建议
 
 安装后请确认云厂商安全组和系统防火墙都已放行对应端口：
@@ -272,6 +323,7 @@ https://t.me/proxy?server=你的IP&port=端口&secret=你的Secret
 - `Snell`：TCP
 - `SOCKS5`：TCP
 - `MTProto`：TCP
+- `AnyTLS`：TCP；自动 ACME 模式还需要 TCP 80
 
 ## 常用命令
 
@@ -305,6 +357,13 @@ ss -tnlp | grep snell
 ss -tnlp | grep mtproto
 ```
 
+### 检查 AnyTLS 配置和监听
+
+```sh
+/usr/local/bin/sing-box-anytls check -c /etc/sing-box-anytls/config.json
+ss -tnlp | grep sing-box-anytls
+```
+
 ## 服务管理
 
 ### Debian / Ubuntu
@@ -314,6 +373,7 @@ systemctl status xray --no-pager
 systemctl status hysteria-server.service --no-pager -l
 systemctl status snell --no-pager -l
 systemctl status mtproxy --no-pager -l
+systemctl status sing-box-anytls --no-pager -l
 ```
 
 ### Alpine
@@ -323,6 +383,7 @@ rc-service xray status
 rc-service hysteria status
 rc-service snell status
 rc-service mtproxy status
+rc-service sing-box-anytls status
 ```
 
 ## 相关文件
@@ -333,6 +394,8 @@ rc-service mtproxy status
 | `/etc/hysteria/config.yaml` | HY2 配置 |
 | `/etc/snell/snell-server.conf` | Snell 配置 |
 | `/etc/mtproto-proxy` | MTProto 配置目录 |
+| `/etc/sing-box-anytls/config.json` | AnyTLS 配置 |
+| `/etc/sing-box-anytls/node-info.txt` | AnyTLS 节点信息 |
 | `/root/install.sh` | 综合脚本 |
 
 ## 常见问题
@@ -369,10 +432,21 @@ apk add curl wget
 
 常见于脚本换行符不对，尤其是手动复制到 Alpine 时。建议优先从 GitHub 直接下载脚本。
 
+### 5. AnyTLS 自动证书申请失败
+
+请确认：
+
+- 域名的 A / AAAA 记录直接指向当前 VPS
+- 域名没有开启普通 CDN 代理
+- 云安全组和系统防火墙已放行 TCP 80
+- TCP 80 没有被 Nginx、Caddy 或其他程序占用
+
+如果 TCP 80 必须由其他服务占用，请选择“使用已有证书”模式。
+
 ## 使用提醒
 
 > [!WARNING]
-> 请不要把 UUID、Reality 公钥、HY2 密码、Snell PSK、SOCKS5 用户名密码、MTProto Secret 这类敏感信息公开发到截图、Issue 或聊天记录里。
+> 请不要把 UUID、Reality 公钥、HY2 密码、Snell PSK、SOCKS5 用户名密码、MTProto Secret、AnyTLS 密码这类敏感信息公开发到截图、Issue 或聊天记录里。
 
 - 本项目仅供学习、测试和自用
 - 使用前请确认符合当地法律法规
