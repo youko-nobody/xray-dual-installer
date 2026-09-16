@@ -26,6 +26,7 @@ success() { printf '%b%s%b\n' "$GREEN" "$*" "$RESET"; }
 warn() { printf '%b%s%b\n' "$YELLOW" "$*" "$RESET" >&2; }
 error() { printf '%b%s%b\n' "$RED" "$*" "$RESET" >&2; }
 headline() { printf '%b%s%b\n' "$BOLD$BLUE" "$*" "$RESET"; }
+menu_section() { printf '%b[ %s ]%b\n' "$BOLD$BLUE" "$*" "$RESET"; }
 
 require_root() {
   if [ "$(id -u)" != "0" ]; then
@@ -112,9 +113,9 @@ print_info_menu_item() {
   ITEM_LABEL="$2"
   NODE_FILE="$3"
   if node_is_saved "$NODE_FILE"; then
-    printf '%b%s. %s（已保存）%b\n' "$BOLD$GREEN" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
+    printf '%b%2s. %s（已保存）%b\n' "$BOLD$GREEN" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
   else
-    printf '%b%s.%b %s\n' "$GREEN" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
+    printf '%b%2s.%b %s\n' "$GREEN" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
   fi
 }
 
@@ -123,9 +124,9 @@ print_main_menu_item() {
   ITEM_LABEL="$2"
   NODE_FILE="$3"
   if node_is_saved "$NODE_FILE"; then
-    printf '%b%s. %s（已保存）%b\n' "$BOLD$GREEN" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
+    printf '%b%2s. %s（已保存）%b\n' "$BOLD$GREEN" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
   else
-    printf '%b%s.%b %s\n' "$GREEN" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
+    printf '%b%2s.%b %s\n' "$GREEN" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
   fi
 }
 
@@ -134,14 +135,14 @@ print_uninstall_menu_item() {
   ITEM_LABEL="$2"
   NODE_FILE="$3"
   if node_is_saved "$NODE_FILE"; then
-    printf '%b%s. %s（已保存）%b\n' "$BOLD$RED" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
+    printf '%b%2s. %s（已保存）%b\n' "$BOLD$RED" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
   else
-    printf '%b%s.%b %s\n' "$YELLOW" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
+    printf '%b%2s.%b %s\n' "$YELLOW" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
   fi
 }
 
 show_saved_overview() {
-  headline "===== 已保存节点总览 ====="
+  menu_section "保存状态"
   echo
   print_overview_row "Reality" 2 "/usr/local/etc/xray/reality-node-info.txt"
   print_overview_row "双节点" 3 "/usr/local/etc/xray/node-info.txt"
@@ -170,6 +171,7 @@ pause_hint() {
 show_menu() {
   headline "===== 综合节点一键脚本 ====="
   echo
+  menu_section "节点安装"
   print_main_menu_item 1 "VLESS + Reality 单节点" "/usr/local/etc/xray/reality-node-info.txt"
   print_main_menu_item 2 "VLESS + Reality + VLESS + WS 双节点" "/usr/local/etc/xray/node-info.txt"
   print_main_menu_item 3 "Hysteria2 / HY2 节点" "/etc/hysteria/node-info.txt"
@@ -178,17 +180,23 @@ show_menu() {
   print_main_menu_item 6 "MTProto 节点" "/etc/mtproto-proxy/node-info.txt"
   print_main_menu_item 7 "AnyTLS 节点" "/etc/sing-box-anytls/node-info.txt"
   print_main_menu_item 8 "Shadowsocks 2022 节点" "/etc/sing-box-ss2022/node-info.txt"
-  printf '%b9.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
-  printf '%b10.%b 卸载节点\n' "$YELLOW" "$RESET"
-  printf '%b0.%b 退出\n' "$RED" "$RESET"
   echo
-  warn "提示：Reality、双节点、SOCKS5、AnyTLS 与 SS2022 可共存；前三者共享 Xray 二进制，但服务和配置相互独立，请避免端口冲突。"
+  menu_section "节点管理"
+  printf '%b%2s.%b %s\n' "$CYAN" "9" "$RESET" "查看已保存的节点信息"
+  printf '%b%2s.%b %s\n' "$YELLOW" "10" "$RESET" "卸载节点"
+  printf '%b%2s.%b %s\n' "$RED" "11" "$RESET" "退出"
+  echo
+  menu_section "使用提示"
+  printf '%b%s%b\n' "$YELLOW" "- Reality、双节点、SOCKS5、AnyTLS 与 SS2022 可以共存。" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "- Reality、双节点和 SOCKS5 共享 Xray 二进制，但服务与配置相互独立。" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "- 安装多个节点时，请避免监听端口冲突。" "$RESET"
 }
 
 show_info_menu() {
   headline "===== 查看节点信息 ====="
-  show_saved_overview
   echo
+  show_saved_overview
+  menu_section "单项查看"
   print_info_menu_item 1 "查看单 Reality 节点" "/usr/local/etc/xray/reality-node-info.txt"
   print_info_menu_item 2 "查看 Xray 双节点" "/usr/local/etc/xray/node-info.txt"
   print_info_menu_item 3 "查看 HY2 节点" "/etc/hysteria/node-info.txt"
@@ -197,10 +205,12 @@ show_info_menu() {
   print_info_menu_item 6 "查看 MTProto 节点" "/etc/mtproto-proxy/node-info.txt"
   print_info_menu_item 7 "查看 AnyTLS 节点" "/etc/sing-box-anytls/node-info.txt"
   print_info_menu_item 8 "查看 SS2022 节点" "/etc/sing-box-ss2022/node-info.txt"
-  printf '%b9.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
-  printf '%b0.%b 返回\n' "$YELLOW" "$RESET"
   echo
-  printf '请选择 [默认: 0]: '
+  menu_section "其他操作"
+  printf '%b%2s.%b %s\n' "$CYAN" "9" "$RESET" "查看全部已保存节点内容"
+  printf '%b%2s.%b %s\n' "$YELLOW" "10" "$RESET" "返回"
+  echo
+  printf '请选择 [默认: 10]: '
   read -r INFO_CHOICE || INFO_CHOICE=""
   case "$INFO_CHOICE" in
     1) ensure_script "install-reality.sh" "/root/install-reality.sh"; /root/install-reality.sh info ;;
@@ -227,7 +237,7 @@ show_info_menu() {
         [ -s "$file" ] && cat "$file" && echo
       done
       ;;
-    ""|0) return ;;
+    ""|0|10) return ;;
     *) error "无效选择" ;;
   esac
 }
@@ -235,6 +245,7 @@ show_info_menu() {
 show_uninstall_menu() {
   headline "===== 卸载节点 ====="
   echo
+  menu_section "单项卸载"
   print_uninstall_menu_item 1 "卸载单 Reality 节点" "/usr/local/etc/xray/reality-node-info.txt"
   print_uninstall_menu_item 2 "卸载 Xray 双节点" "/usr/local/etc/xray/node-info.txt"
   print_uninstall_menu_item 3 "卸载 HY2 节点" "/etc/hysteria/node-info.txt"
@@ -243,10 +254,12 @@ show_uninstall_menu() {
   print_uninstall_menu_item 6 "卸载 MTProto 节点" "/etc/mtproto-proxy/node-info.txt"
   print_uninstall_menu_item 7 "卸载 AnyTLS 节点" "/etc/sing-box-anytls/node-info.txt"
   print_uninstall_menu_item 8 "卸载 SS2022 节点" "/etc/sing-box-ss2022/node-info.txt"
-  printf '%b9.%b 卸载全部已保存节点\n' "$RED" "$RESET"
-  printf '%b0.%b 返回\n' "$CYAN" "$RESET"
   echo
-  printf '请选择 [默认: 0]: '
+  menu_section "批量操作"
+  printf '%b%2s.%b %s\n' "$RED" "9" "$RESET" "卸载全部已保存节点"
+  printf '%b%2s.%b %s\n' "$CYAN" "10" "$RESET" "返回"
+  echo
+  printf '请选择 [默认: 10]: '
   read -r UNINSTALL_CHOICE || UNINSTALL_CHOICE=""
   case "$UNINSTALL_CHOICE" in
     1) run_remote_script "uninstall-reality.sh" "/root/uninstall-reality.sh" ;;
@@ -274,7 +287,7 @@ show_uninstall_menu() {
         warn "已取消卸载。"
       fi
       ;;
-    ""|0) return ;;
+    ""|0|10) return ;;
     *) error "无效选择" ;;
   esac
 }
@@ -325,7 +338,7 @@ main() {
       8) run_remote_script "install-ss2022.sh" "/root/install-ss2022.sh" install; pause_hint; exit 0 ;;
       9) show_info_menu ;;
       10) show_uninstall_menu ;;
-      0) success "已退出。"; exit 0 ;;
+      0|11) success "已退出。"; exit 0 ;;
       *) error "无效选择，请重新输入。" ;;
     esac
   done

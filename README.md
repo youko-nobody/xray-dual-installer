@@ -42,16 +42,20 @@ curl -L -o /root/install.sh https://raw.githubusercontent.com/youko-nobody/xray-
 综合脚本菜单包含：
 
 ```text
-1. VLESS + Reality 单节点
-2. VLESS + Reality + VLESS + WS 双节点
-3. Hysteria2 / HY2 节点
-4. Snell v6 节点
-5. SOCKS5 节点
-6. MTProto 节点
-7. AnyTLS 节点
-8. Shadowsocks 2022 节点
-9. 查看已保存的节点信息
+[ 节点安装 ]
+ 1. VLESS + Reality 单节点
+ 2. VLESS + Reality + VLESS + WS 双节点
+ 3. Hysteria2 / HY2 节点
+ 4. Snell v6 节点
+ 5. SOCKS5 节点
+ 6. MTProto 节点
+ 7. AnyTLS 节点
+ 8. Shadowsocks 2022 节点
+
+[ 节点管理 ]
+ 9. 查看已保存的节点信息
 10. 卸载节点
+11. 退出
 ```
 
 也支持直接指定类型：
