@@ -4,7 +4,7 @@ umask 077
 
 SERVICE_NAME="xray-socks5"
 CONFIG_FILE="/usr/local/etc/xray/socks5-config.json"
-CONFIG_NEW="${CONFIG_FILE}.new.$$"
+CONFIG_NEW="${CONFIG_FILE%.json}.new.$$.json"
 CONFIG_BACKUP="${CONFIG_FILE}.bak.$$"
 NODE_INFO_FILE="/usr/local/etc/xray/socks5-node-info.txt"
 NODE_INFO_COPY="/root/socks5-node-info.txt"

@@ -5,7 +5,7 @@ umask 077
 SNI="www.sony.com"
 WS_PATH="/ws"
 CONFIG_FILE="/usr/local/etc/xray/config.json"
-CONFIG_NEW="${CONFIG_FILE}.new.$$"
+CONFIG_NEW="${CONFIG_FILE%.json}.new.$$.json"
 CONFIG_BACKUP="${CONFIG_FILE}.bak.$$"
 NODE_INFO_FILE="/usr/local/etc/xray/node-info.txt"
 NODE_INFO_COPY="/root/xray-node-info.txt"

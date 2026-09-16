@@ -244,6 +244,56 @@ choose_action_if_installed() {
   esac
 }
 
+run_snell_probe() {
+  SNELL_PROBE_ARG="$1"
+  SNELL_PROBE_FILE="$SNELL_TEMP_DIR/snell-probe.txt"
+  : > "$SNELL_PROBE_FILE"
+
+  if command -v timeout >/dev/null 2>&1; then
+    if timeout 5 "$SNELL_EXTRACTED" "$SNELL_PROBE_ARG" >"$SNELL_PROBE_FILE" 2>&1; then
+      SNELL_PROBE_STATUS=0
+    else
+      SNELL_PROBE_STATUS=$?
+    fi
+  elif "$SNELL_EXTRACTED" "$SNELL_PROBE_ARG" >"$SNELL_PROBE_FILE" 2>&1; then
+    SNELL_PROBE_STATUS=0
+  else
+    SNELL_PROBE_STATUS=$?
+  fi
+
+  SNELL_PROBE_OUTPUT="$(cat "$SNELL_PROBE_FILE")"
+}
+
+probe_snell_binary() {
+  SNELL_LAST_PROBE_OUTPUT=""
+
+  for SNELL_PROBE_ARG in --version -v -V; do
+    run_snell_probe "$SNELL_PROBE_ARG"
+    SNELL_LAST_PROBE_OUTPUT="$SNELL_PROBE_OUTPUT"
+    if printf '%s\n' "$SNELL_PROBE_OUTPUT" |
+       grep -Eqi 'snell([-[:space:]]*server)?[^0-9]*v?[0-9]+([.][0-9]+)+'; then
+      return 0
+    fi
+  done
+
+  run_snell_probe --help
+  SNELL_LAST_PROBE_OUTPUT="$SNELL_PROBE_OUTPUT"
+  if [ "$SNELL_PROBE_STATUS" -eq 0 ] &&
+     printf '%s\n' "$SNELL_PROBE_OUTPUT" | grep -Eqi '(snell-server|usage:)'; then
+    warn "未能解析 Snell 版本文本，但二进制可正常执行并显示帮助信息，继续安装"
+    return 0
+  fi
+
+  error "Snell 二进制版本检查失败"
+  if [ -n "$SNELL_LAST_PROBE_OUTPUT" ]; then
+    error "探测输出（前 5 行）："
+    printf '%s\n' "$SNELL_LAST_PROBE_OUTPUT" | sed -n '1,5p' >&2
+  else
+    error "二进制没有返回可识别的版本或帮助信息"
+  fi
+  return 1
+}
+
 download_snell() {
   ZIP_NAME="$(detect_snell_zip)"
   URL="https://dl.nssurge.com/snell/${ZIP_NAME}"
@@ -272,10 +322,8 @@ download_snell() {
     return 1
   fi
   chmod 700 "$SNELL_EXTRACTED"
-  VERSION_OUTPUT="$("$SNELL_EXTRACTED" --version 2>&1 || true)"
-  if ! printf '%s\n' "$VERSION_OUTPUT" | grep -Eq '^snell-server v[0-9]'; then
+  if ! probe_snell_binary; then
     cleanup_snell_download
-    error "Snell 二进制版本检查失败"
     return 1
   fi
 
@@ -293,7 +341,7 @@ download_snell() {
 }
 
 cleanup_snell_download() {
-  rm -f "$SNELL_TEMP_DIR/snell.zip" "$SNELL_TEMP_DIR/snell-server"
+  rm -f "$SNELL_TEMP_DIR/snell.zip" "$SNELL_TEMP_DIR/snell-server" "$SNELL_TEMP_DIR/snell-probe.txt"
   rmdir "$SNELL_TEMP_DIR" 2>/dev/null || true
 }
 
