@@ -1,14 +1,22 @@
 #!/bin/sh
 set -e
+umask 077
 
 DEFAULT_PORT="8666"
 DEFAULT_MODE="default"
 SNELL_VERSION="v6.0.0rc2"
 CONFIG_DIR="/etc/snell"
 CONFIG_FILE="/etc/snell/snell-server.conf"
+CONFIG_NEW="${CONFIG_FILE}.new.$$"
+CONFIG_BACKUP="${CONFIG_FILE}.bak.$$"
 NODE_INFO_FILE="/etc/snell/node-info.txt"
 NODE_INFO_COPY="/root/snell-node-info.txt"
 SERVICE_NAME="snell"
+SNELL_BINARY="/usr/local/bin/snell-server"
+SNELL_BINARY_NEW="${SNELL_BINARY}.new.$$"
+SNELL_BINARY_BACKUP="${SNELL_BINARY}.bak.$$"
+SNELL_INSTALL_PENDING=0
+HAD_SNELL_BINARY=0
 
 if [ -t 1 ]; then
   RED="$(printf '\033[31m')"
@@ -113,6 +121,11 @@ is_tcp_port_in_use() {
   return 1
 }
 
+current_config_uses_port() {
+  [ -f "$CONFIG_FILE" ] &&
+    grep -Eq '^listen[[:space:]]*=.*:'"$1"'([,[:space:]]|$)' "$CONFIG_FILE"
+}
+
 prompt_port() {
   while :; do
     if [ -t 0 ] && [ -r /dev/tty ]; then
@@ -130,8 +143,10 @@ prompt_port() {
     fi
 
     if is_tcp_port_in_use "$INPUT_PORT"; then
-      warn "TCP 端口已被占用：$INPUT_PORT"
-      continue
+      if ! current_config_uses_port "$INPUT_PORT" || ! service_is_running; then
+        warn "TCP 端口已被占用：$INPUT_PORT"
+        continue
+      fi
     fi
 
     printf '%s' "$INPUT_PORT"
@@ -232,15 +247,76 @@ choose_action_if_installed() {
 download_snell() {
   ZIP_NAME="$(detect_snell_zip)"
   URL="https://dl.nssurge.com/snell/${ZIP_NAME}"
-  cd /root
-  rm -f snell.zip snell-server
+  SNELL_TEMP_DIR="$(mktemp -d /tmp/snell-install.XXXXXX)"
+  SNELL_ARCHIVE="$SNELL_TEMP_DIR/snell.zip"
+  SNELL_EXTRACTED="$SNELL_TEMP_DIR/snell-server"
+
+  warn "Snell 官方未提供 SHA-256 摘要，将执行 ZIP 完整性、可执行文件和版本检查"
   if command -v wget >/dev/null 2>&1; then
-    wget -O snell.zip "$URL"
+    if ! wget -qO "$SNELL_ARCHIVE" "$URL"; then
+      cleanup_snell_download
+      error "Snell 下载失败"
+      return 1
+    fi
   else
-    curl -fsSL -o snell.zip "$URL"
+    if ! curl -fsSL -o "$SNELL_ARCHIVE" "$URL"; then
+      cleanup_snell_download
+      error "Snell 下载失败"
+      return 1
+    fi
   fi
-  unzip -o snell.zip
-  install -m 755 snell-server /usr/local/bin/snell-server
+  if ! unzip -tq "$SNELL_ARCHIVE" >/dev/null 2>&1 ||
+     ! unzip -oq "$SNELL_ARCHIVE" snell-server -d "$SNELL_TEMP_DIR"; then
+    cleanup_snell_download
+    error "Snell 压缩包校验失败"
+    return 1
+  fi
+  chmod 700 "$SNELL_EXTRACTED"
+  VERSION_OUTPUT="$("$SNELL_EXTRACTED" --version 2>&1 || true)"
+  if ! printf '%s\n' "$VERSION_OUTPUT" | grep -Eq '^snell-server v[0-9]'; then
+    cleanup_snell_download
+    error "Snell 二进制版本检查失败"
+    return 1
+  fi
+
+  rm -f "$SNELL_BINARY_BACKUP" "$SNELL_BINARY_NEW"
+  if [ -f "$SNELL_BINARY" ]; then
+    cp -p "$SNELL_BINARY" "$SNELL_BINARY_BACKUP"
+    HAD_SNELL_BINARY=1
+  else
+    HAD_SNELL_BINARY=0
+  fi
+  install -m 755 "$SNELL_EXTRACTED" "$SNELL_BINARY_NEW"
+  mv -f "$SNELL_BINARY_NEW" "$SNELL_BINARY"
+  SNELL_INSTALL_PENDING=1
+  cleanup_snell_download
+}
+
+cleanup_snell_download() {
+  rm -f "$SNELL_TEMP_DIR/snell.zip" "$SNELL_TEMP_DIR/snell-server"
+  rmdir "$SNELL_TEMP_DIR" 2>/dev/null || true
+}
+
+restore_snell_binary() {
+  [ "$SNELL_INSTALL_PENDING" -eq 1 ] || return 0
+  rm -f "$SNELL_BINARY"
+  if [ "$HAD_SNELL_BINARY" -eq 1 ]; then
+    mv -f "$SNELL_BINARY_BACKUP" "$SNELL_BINARY"
+  else
+    rm -f "$SNELL_BINARY_BACKUP"
+  fi
+  SNELL_INSTALL_PENDING=0
+}
+
+finalize_snell_binary() {
+  rm -f "$SNELL_BINARY_BACKUP" "$SNELL_BINARY_NEW"
+  SNELL_INSTALL_PENDING=0
+}
+
+cleanup_pending_snell() {
+  if [ "$SNELL_INSTALL_PENDING" -eq 1 ]; then
+    restore_snell_binary
+  fi
 }
 
 stop_existing_snell() {
@@ -251,6 +327,71 @@ stop_existing_snell() {
     rc-service "$SERVICE_NAME" stop >/dev/null 2>&1 || true
   fi
   pkill -f "/usr/local/bin/snell-server -c $CONFIG_FILE" 2>/dev/null || true
+}
+
+start_configured_service() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    write_systemd_service
+  elif command -v rc-service >/dev/null 2>&1; then
+    write_openrc_service
+  else
+    write_fallback_launcher
+  fi
+}
+
+service_is_running() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    systemctl is-active --quiet "$SERVICE_NAME"
+  elif command -v rc-service >/dev/null 2>&1; then
+    rc-service "$SERVICE_NAME" status >/dev/null 2>&1
+  else
+    pgrep -f "/usr/local/bin/snell-server -c $CONFIG_FILE" >/dev/null 2>&1
+  fi
+}
+
+wait_for_service_port() {
+  ATTEMPT=0
+  while [ "$ATTEMPT" -lt 10 ]; do
+    if service_is_running && is_tcp_port_in_use "$PORT"; then
+      return 0
+    fi
+    ATTEMPT=$((ATTEMPT + 1))
+    sleep 1
+  done
+  return 1
+}
+
+activate_config() {
+  HAD_CONFIG=0
+  rm -f "$CONFIG_BACKUP"
+  if [ -f "$CONFIG_FILE" ]; then
+    cp -p "$CONFIG_FILE" "$CONFIG_BACKUP"
+    HAD_CONFIG=1
+  fi
+
+  stop_existing_snell
+  mv -f "$CONFIG_NEW" "$CONFIG_FILE"
+
+  if start_configured_service && wait_for_service_port; then
+    finalize_snell_binary
+    rm -f "$CONFIG_BACKUP"
+    return 0
+  fi
+
+  error "新配置启动失败，正在恢复旧配置"
+  stop_existing_snell
+  rm -f "$CONFIG_FILE"
+  if [ "$HAD_CONFIG" -eq 1 ]; then
+    mv -f "$CONFIG_BACKUP" "$CONFIG_FILE"
+    restore_snell_binary
+    if ! start_configured_service; then
+      warn "旧配置已恢复，但旧服务重启失败，请手动检查"
+    fi
+  else
+    restore_snell_binary
+    rm -f "$CONFIG_BACKUP"
+  fi
+  return 1
 }
 
 write_systemd_service() {
@@ -270,8 +411,8 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 SERVICE
 
-  systemctl daemon-reload
-  systemctl enable --now "$SERVICE_NAME"
+  systemctl daemon-reload &&
+  systemctl enable --now "$SERVICE_NAME" &&
   systemctl restart "$SERVICE_NAME"
 }
 
@@ -375,7 +516,9 @@ systemctl status snell --no-pager -l
 $NODE_INFO_COPY
 INFO
 
+  chmod 600 "$NODE_INFO_FILE"
   cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
+  chmod 600 "$NODE_INFO_COPY" 2>/dev/null || true
 }
 
 case "${1:-}" in
@@ -400,7 +543,6 @@ if [ "${1:-}" != "install" ] && [ "${1:-}" != "--install" ]; then
 fi
 
 install_deps
-stop_existing_snell
 
 PUBLIC_IP="$(detect_ip)"
 PORT="$(prompt_port)"
@@ -415,11 +557,13 @@ case "$MODE" in
 esac
 PSK="$(make_psk)"
 
+trap cleanup_pending_snell EXIT
 download_snell
 
 mkdir -p "$CONFIG_DIR"
 
-cat >"$CONFIG_FILE" <<CONFIG
+rm -f "$CONFIG_NEW"
+cat >"$CONFIG_NEW" <<CONFIG
 [snell-server]
 listen = 0.0.0.0:${PORT},[::]:${PORT}
 psk = ${PSK}
@@ -428,13 +572,8 @@ dns-ip-preference = default
 mode = ${MODE}
 CONFIG
 
-if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-  write_systemd_service
-elif command -v rc-service >/dev/null 2>&1; then
-  write_openrc_service
-else
-  write_fallback_launcher
-fi
+chmod 600 "$CONFIG_NEW"
+activate_config
 
 write_node_info
 

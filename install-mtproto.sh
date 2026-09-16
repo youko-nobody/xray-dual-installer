@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+umask 077
 
 CONFIG_DIR="/etc/mtproto-proxy"
 NODE_INFO_FILE="/etc/mtproto-proxy/node-info.txt"
@@ -8,6 +9,18 @@ BUILD_DIR="/usr/local/src/MTProxy"
 SERVICE_NAME="mtproxy"
 SYSTEMD_SERVICE_FILE="/etc/systemd/system/mtproxy.service"
 OPENRC_SERVICE_FILE="/etc/init.d/mtproxy"
+FALLBACK_SERVICE_FILE="/root/start-mtproto.sh"
+PROXY_SECRET_FILE="$CONFIG_DIR/proxy-secret"
+PROXY_SECRET_NEW="${PROXY_SECRET_FILE}.new.$$"
+PROXY_SECRET_BACKUP="${PROXY_SECRET_FILE}.bak.$$"
+PROXY_CONFIG_FILE="$CONFIG_DIR/proxy-multi.conf"
+PROXY_CONFIG_NEW="${PROXY_CONFIG_FILE}.new.$$"
+PROXY_CONFIG_BACKUP="${PROXY_CONFIG_FILE}.bak.$$"
+MT_BINARY="/usr/local/bin/mtproto-proxy"
+MT_BINARY_NEW="${MT_BINARY}.new.$$"
+MT_BINARY_BACKUP="${MT_BINARY}.bak.$$"
+MT_INSTALL_PENDING=0
+HAD_MT_BINARY=0
 
 if [ -t 1 ]; then
   RED="$(printf '\033[31m')"
@@ -98,6 +111,28 @@ is_tcp_port_in_use() {
   return 1
 }
 
+current_saved_node_uses_port() {
+  if [ -f "$NODE_INFO_FILE" ]; then
+    grep -Eq '^端口：'"$1"'$' "$NODE_INFO_FILE"
+    return $?
+  fi
+  if [ -f "$NODE_INFO_COPY" ]; then
+    grep -Eq '^端口：'"$1"'$' "$NODE_INFO_COPY"
+    return $?
+  fi
+  return 1
+}
+
+current_mtproto_is_running() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    systemctl is-active --quiet "$SERVICE_NAME"
+  elif command -v rc-service >/dev/null 2>&1; then
+    rc-service "$SERVICE_NAME" status >/dev/null 2>&1
+  else
+    pgrep -f "/usr/local/bin/mtproto-proxy" >/dev/null 2>&1
+  fi
+}
+
 random_port() {
   while :; do
     PORT="$(od -An -N2 -tu2 /dev/urandom 2>/dev/null | tr -d ' ' | awk '{print 20000 + ($1 % 20000)}')"
@@ -138,8 +173,10 @@ prompt_port() {
     fi
 
     if is_tcp_port_in_use "$INPUT_PORT"; then
-      warn "TCP 端口已被占用：$INPUT_PORT"
-      continue
+      if ! current_saved_node_uses_port "$INPUT_PORT" || ! current_mtproto_is_running; then
+        warn "TCP 端口已被占用：$INPUT_PORT"
+        continue
+      fi
     fi
 
     printf '%s' "$INPUT_PORT"
@@ -209,14 +246,6 @@ choose_action_if_installed() {
   esac
 }
 
-cleanup_old_state() {
-  rm -f "$NODE_INFO_FILE"
-  rm -f "$NODE_INFO_COPY"
-  rm -f "$CONFIG_DIR/proxy-secret"
-  rm -f "$CONFIG_DIR/proxy-multi.conf"
-  rm -f /root/start-mtproto.sh
-}
-
 stop_existing_mtproto() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
     systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
@@ -227,28 +256,187 @@ stop_existing_mtproto() {
   pkill -f "/usr/local/bin/mtproto-proxy" 2>/dev/null || true
 }
 
+detect_service_mode() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    SERVICE_MODE="systemd"
+    CONTROL_FILE="$SYSTEMD_SERVICE_FILE"
+  elif command -v rc-service >/dev/null 2>&1; then
+    SERVICE_MODE="openrc"
+    CONTROL_FILE="$OPENRC_SERVICE_FILE"
+  else
+    SERVICE_MODE="fallback"
+    CONTROL_FILE="$FALLBACK_SERVICE_FILE"
+  fi
+  CONTROL_BACKUP="${CONTROL_FILE}.bak.$$"
+}
+
+start_configured_service() {
+  case "$SERVICE_MODE" in
+    systemd) write_systemd_service ;;
+    openrc) write_openrc_service ;;
+    fallback) write_fallback_launcher ;;
+  esac
+}
+
+service_is_running() {
+  case "$SERVICE_MODE" in
+    systemd) systemctl is-active --quiet "$SERVICE_NAME" ;;
+    openrc) rc-service "$SERVICE_NAME" status >/dev/null 2>&1 ;;
+    fallback) pgrep -f "/usr/local/bin/mtproto-proxy" >/dev/null 2>&1 ;;
+  esac
+}
+
+wait_for_service_port() {
+  ATTEMPT=0
+  while [ "$ATTEMPT" -lt 10 ]; do
+    if service_is_running && is_tcp_port_in_use "$PORT"; then
+      return 0
+    fi
+    ATTEMPT=$((ATTEMPT + 1))
+    sleep 1
+  done
+  return 1
+}
+
+restart_previous_service() {
+  case "$SERVICE_MODE" in
+    systemd)
+      systemctl daemon-reload &&
+      systemctl enable --now "$SERVICE_NAME" &&
+      systemctl restart "$SERVICE_NAME"
+      ;;
+    openrc)
+      chmod 700 "$OPENRC_SERVICE_FILE"
+      rc-update add "$SERVICE_NAME" default >/dev/null 2>&1 || true
+      rc-service "$SERVICE_NAME" restart || rc-service "$SERVICE_NAME" start
+      ;;
+    fallback)
+      chmod 700 "$FALLBACK_SERVICE_FILE"
+      "$FALLBACK_SERVICE_FILE"
+      ;;
+  esac
+}
+
+activate_runtime() {
+  detect_service_mode
+  HAD_SECRET=0
+  HAD_PROXY_CONFIG=0
+  HAD_CONTROL=0
+  rm -f "$PROXY_SECRET_BACKUP" "$PROXY_CONFIG_BACKUP" "$CONTROL_BACKUP"
+
+  if [ -f "$PROXY_SECRET_FILE" ]; then
+    cp -p "$PROXY_SECRET_FILE" "$PROXY_SECRET_BACKUP"
+    HAD_SECRET=1
+  fi
+  if [ -f "$PROXY_CONFIG_FILE" ]; then
+    cp -p "$PROXY_CONFIG_FILE" "$PROXY_CONFIG_BACKUP"
+    HAD_PROXY_CONFIG=1
+  fi
+  if [ -f "$CONTROL_FILE" ]; then
+    cp -p "$CONTROL_FILE" "$CONTROL_BACKUP"
+    HAD_CONTROL=1
+  fi
+
+  stop_existing_mtproto
+  mv -f "$PROXY_SECRET_NEW" "$PROXY_SECRET_FILE"
+  mv -f "$PROXY_CONFIG_NEW" "$PROXY_CONFIG_FILE"
+
+  if start_configured_service && wait_for_service_port; then
+    finalize_mt_binary
+    rm -f "$PROXY_SECRET_BACKUP" "$PROXY_CONFIG_BACKUP" "$CONTROL_BACKUP"
+    return 0
+  fi
+
+  error "新配置启动失败，正在恢复旧 MTProto 服务"
+  stop_existing_mtproto
+  if [ "$HAD_CONTROL" -eq 0 ]; then
+    case "$SERVICE_MODE" in
+      systemd) systemctl disable "$SERVICE_NAME" >/dev/null 2>&1 || true ;;
+      openrc) rc-update del "$SERVICE_NAME" default >/dev/null 2>&1 || true ;;
+    esac
+  fi
+  rm -f "$PROXY_SECRET_FILE" "$PROXY_CONFIG_FILE" "$CONTROL_FILE"
+  if [ "$HAD_SECRET" -eq 1 ]; then mv -f "$PROXY_SECRET_BACKUP" "$PROXY_SECRET_FILE"; fi
+  if [ "$HAD_PROXY_CONFIG" -eq 1 ]; then mv -f "$PROXY_CONFIG_BACKUP" "$PROXY_CONFIG_FILE"; fi
+  restore_mt_binary
+  if [ "$HAD_CONTROL" -eq 1 ]; then
+    mv -f "$CONTROL_BACKUP" "$CONTROL_FILE"
+    if ! restart_previous_service; then
+      warn "旧配置已恢复，但旧服务重启失败，请手动检查"
+    fi
+  elif [ "$SERVICE_MODE" = "systemd" ]; then
+    systemctl daemon-reload
+  fi
+  rm -f "$PROXY_SECRET_BACKUP" "$PROXY_CONFIG_BACKUP" "$CONTROL_BACKUP"
+  return 1
+}
+
 download_and_build_mtproto() {
   rm -rf "$BUILD_DIR"
   mkdir -p "$(dirname "$BUILD_DIR")"
   git clone --depth=1 https://github.com/TelegramMessenger/MTProxy "$BUILD_DIR"
   cd "$BUILD_DIR"
   make -j1
-  install -m 755 objs/bin/mtproto-proxy /usr/local/bin/mtproto-proxy
+  if [ ! -x "objs/bin/mtproto-proxy" ]; then
+    error "MTProxy 编译产物不存在或不可执行"
+    return 1
+  fi
+  rm -f "$MT_BINARY_NEW" "$MT_BINARY_BACKUP"
+  if [ -f "$MT_BINARY" ]; then
+    cp -p "$MT_BINARY" "$MT_BINARY_BACKUP"
+    HAD_MT_BINARY=1
+  else
+    HAD_MT_BINARY=0
+  fi
+  install -m 755 objs/bin/mtproto-proxy "$MT_BINARY_NEW"
+  mv -f "$MT_BINARY_NEW" "$MT_BINARY"
+  MT_INSTALL_PENDING=1
+}
+
+restore_mt_binary() {
+  [ "$MT_INSTALL_PENDING" -eq 1 ] || return 0
+  rm -f "$MT_BINARY"
+  if [ "$HAD_MT_BINARY" -eq 1 ]; then
+    mv -f "$MT_BINARY_BACKUP" "$MT_BINARY"
+  else
+    rm -f "$MT_BINARY_BACKUP"
+  fi
+  MT_INSTALL_PENDING=0
+}
+
+finalize_mt_binary() {
+  rm -f "$MT_BINARY_BACKUP" "$MT_BINARY_NEW"
+  MT_INSTALL_PENDING=0
+}
+
+cleanup_pending_mt() {
+  if [ "$MT_INSTALL_PENDING" -eq 1 ]; then
+    restore_mt_binary
+  fi
 }
 
 prepare_runtime_files() {
   mkdir -p "$CONFIG_DIR"
+  chmod 755 "$CONFIG_DIR"
+  rm -f "$PROXY_SECRET_NEW" "$PROXY_CONFIG_NEW"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://core.telegram.org/getProxySecret -o "$CONFIG_DIR/proxy-secret"
-    curl -fsSL https://core.telegram.org/getProxyConfig -o "$CONFIG_DIR/proxy-multi.conf"
+    curl -fsSL https://core.telegram.org/getProxySecret -o "$PROXY_SECRET_NEW"
+    curl -fsSL https://core.telegram.org/getProxyConfig -o "$PROXY_CONFIG_NEW"
   else
-    wget -O "$CONFIG_DIR/proxy-secret" https://core.telegram.org/getProxySecret
-    wget -O "$CONFIG_DIR/proxy-multi.conf" https://core.telegram.org/getProxyConfig
+    wget -O "$PROXY_SECRET_NEW" https://core.telegram.org/getProxySecret
+    wget -O "$PROXY_CONFIG_NEW" https://core.telegram.org/getProxyConfig
   fi
+  if [ ! -s "$PROXY_SECRET_NEW" ] || [ ! -s "$PROXY_CONFIG_NEW" ]; then
+    error "MTProto 运行数据下载不完整"
+    return 1
+  fi
+  chmod 644 "$PROXY_SECRET_NEW" "$PROXY_CONFIG_NEW"
 }
 
 write_systemd_service() {
-  cat >/etc/systemd/system/${SERVICE_NAME}.service <<SERVICE
+  SERVICE_TEMP="${SYSTEMD_SERVICE_FILE}.new.$$"
+  rm -f "$SERVICE_TEMP"
+  cat >"$SERVICE_TEMP" <<SERVICE
 [Unit]
 Description=Telegram MTProto Proxy
 After=network.target
@@ -265,13 +453,18 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 SERVICE
 
-  systemctl daemon-reload
-  systemctl enable --now "$SERVICE_NAME"
+  chmod 600 "$SERVICE_TEMP"
+  mv -f "$SERVICE_TEMP" "$SYSTEMD_SERVICE_FILE"
+
+  systemctl daemon-reload &&
+  systemctl enable --now "$SERVICE_NAME" &&
   systemctl restart "$SERVICE_NAME"
 }
 
 write_openrc_service() {
-  cat >/etc/init.d/${SERVICE_NAME} <<SERVICE
+  SERVICE_TEMP="${OPENRC_SERVICE_FILE}.new.$$"
+  rm -f "$SERVICE_TEMP"
+  cat >"$SERVICE_TEMP" <<SERVICE
 #!/sbin/openrc-run
 name="mtproxy"
 description="Telegram MTProto Proxy"
@@ -290,20 +483,24 @@ depend() {
 }
 SERVICE
 
-  chmod +x /etc/init.d/${SERVICE_NAME}
+  chmod 700 "$SERVICE_TEMP"
+  mv -f "$SERVICE_TEMP" "$OPENRC_SERVICE_FILE"
   rc-update add "$SERVICE_NAME" default >/dev/null 2>&1 || true
   rc-service "$SERVICE_NAME" restart || rc-service "$SERVICE_NAME" start
 }
 
 write_fallback_launcher() {
-  cat >/root/start-mtproto.sh <<START
+  SERVICE_TEMP="${FALLBACK_SERVICE_FILE}.new.$$"
+  rm -f "$SERVICE_TEMP"
+  cat >"$SERVICE_TEMP" <<START
 #!/bin/sh
 pkill -f "/usr/local/bin/mtproto-proxy" 2>/dev/null || true
 cd $CONFIG_DIR
 nohup /usr/local/bin/mtproto-proxy -u nobody -p ${STATS_PORT} -H ${PORT} -S ${SECRET} --aes-pwd $CONFIG_DIR/proxy-secret $CONFIG_DIR/proxy-multi.conf -M 1 >/var/log/mtproto.log 2>&1 &
 START
-  chmod +x /root/start-mtproto.sh
-  /root/start-mtproto.sh
+  chmod 700 "$SERVICE_TEMP"
+  mv -f "$SERVICE_TEMP" "$FALLBACK_SERVICE_FILE"
+  "$FALLBACK_SERVICE_FILE"
 }
 
 show_status() {
@@ -379,7 +576,9 @@ systemctl status mtproxy --no-pager -l
 $NODE_INFO_COPY
 INFO
 
+  chmod 600 "$NODE_INFO_FILE"
   cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
+  chmod 600 "$NODE_INFO_COPY" 2>/dev/null || true
 }
 
 case "${1:-}" in
@@ -404,8 +603,6 @@ if [ "${1:-}" != "install" ] && [ "${1:-}" != "--install" ]; then
 fi
 
 install_deps
-stop_existing_mtproto
-cleanup_old_state
 
 PUBLIC_IP="$(detect_ip)"
 PORT="$(prompt_port)"
@@ -413,16 +610,10 @@ STATS_PORT="$(random_local_port)"
 SECRET="$(make_secret)"
 CLIENT_SECRET="dd${SECRET}"
 
+trap cleanup_pending_mt EXIT
 download_and_build_mtproto
 prepare_runtime_files
-
-if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-  write_systemd_service
-elif command -v rc-service >/dev/null 2>&1; then
-  write_openrc_service
-else
-  write_fallback_launcher
-fi
+activate_runtime
 
 write_node_info
 

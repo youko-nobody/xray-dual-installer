@@ -1,13 +1,27 @@
 #!/bin/sh
 set -e
+umask 077
 
 DEFAULT_PORT="8443"
 SNI="bing.com"
 MASQUERADE_URL="https://www.bing.com"
 CONFIG_FILE="/etc/hysteria/config.yaml"
+CONFIG_NEW="${CONFIG_FILE}.new.$$"
+CONFIG_BACKUP="${CONFIG_FILE}.bak.$$"
 CERT_DIR="/etc/hysteria/cert"
+CERT_FILE="$CERT_DIR/server.crt"
+CERT_NEW="${CERT_FILE}.new.$$"
+CERT_BACKUP="${CERT_FILE}.bak.$$"
+KEY_FILE="$CERT_DIR/server.key"
+KEY_NEW="${KEY_FILE}.new.$$"
+KEY_BACKUP="${KEY_FILE}.bak.$$"
 NODE_INFO_FILE="/etc/hysteria/node-info.txt"
 NODE_INFO_COPY="/root/hy2-node-info.txt"
+HY2_BINARY="/usr/local/bin/hysteria"
+HY2_BINARY_NEW="${HY2_BINARY}.new.$$"
+HY2_BINARY_BACKUP="${HY2_BINARY}.bak.$$"
+HY2_INSTALL_PENDING=0
+HAD_HY2_BINARY=0
 
 if [ -t 1 ]; then
   RED="$(printf '\033[31m')"
@@ -64,6 +78,13 @@ detect_ip() {
   printf '%s' "$IP"
 }
 
+uri_host() {
+  case "$1" in
+    *:*) printf '[%s]' "$1" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
 install_deps() {
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
@@ -88,10 +109,14 @@ is_valid_port() {
 is_udp_port_in_use() {
   PORT_TO_CHECK="$1"
   if command -v ss >/dev/null 2>&1; then
-    ss -unlp 2>/dev/null | awk '{print $5}' | grep -Eq "(^|:)$PORT_TO_CHECK$"
+    ss -lnu 2>/dev/null | awk '{print $4}' | grep -Eq "(^|:)$PORT_TO_CHECK$"
     return $?
   fi
   return 1
+}
+
+current_config_uses_port() {
+  [ -f "$CONFIG_FILE" ] && grep -Eq '^listen:[[:space:]]*:'"$1"'$' "$CONFIG_FILE"
 }
 
 prompt_port() {
@@ -111,8 +136,10 @@ prompt_port() {
     fi
 
     if is_udp_port_in_use "$INPUT_PORT"; then
-      warn "UDP 端口已被占用：$INPUT_PORT"
-      continue
+      if ! current_config_uses_port "$INPUT_PORT" || ! service_is_running; then
+        warn "UDP 端口已被占用：$INPUT_PORT"
+        continue
+      fi
     fi
 
     printf '%s' "$INPUT_PORT"
@@ -185,9 +212,114 @@ choose_action_if_installed() {
   esac
 }
 
+download_file() {
+  DOWNLOAD_URL="$1"
+  DOWNLOAD_PATH="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$DOWNLOAD_PATH" "$DOWNLOAD_URL"
+  else
+    wget -qO "$DOWNLOAD_PATH" "$DOWNLOAD_URL"
+  fi
+}
+
+file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    openssl dgst -sha256 "$1" | awk '{print $NF}'
+  fi
+}
+
+detect_hysteria_asset() {
+  ARCH="$(uname -m)"
+  case "$ARCH" in
+    x86_64|amd64) printf '%s' "hysteria-linux-amd64" ;;
+    i386|i686) printf '%s' "hysteria-linux-386" ;;
+    aarch64|arm64) printf '%s' "hysteria-linux-arm64" ;;
+    armv7l) printf '%s' "hysteria-linux-arm" ;;
+    riscv64) printf '%s' "hysteria-linux-riscv64" ;;
+    *)
+      error "不支持的系统架构：$ARCH"
+      return 1
+      ;;
+  esac
+}
+
+cleanup_hy2_download() {
+  rm -f "$HY2_TEMP_DIR/hysteria" "$HY2_TEMP_DIR/hashes.txt"
+  rmdir "$HY2_TEMP_DIR" 2>/dev/null || true
+}
+
 install_hysteria_binary() {
-  info "正在安装 Hysteria2..."
-  curl -fsSL https://get.hy2.sh/ | bash
+  info "正在从官方 GitHub Release 安装 Hysteria2..."
+  HY2_ASSET="$(detect_hysteria_asset)"
+  HY2_TEMP_DIR="$(mktemp -d /tmp/hysteria-install.XXXXXX)"
+  HY2_DOWNLOAD="$HY2_TEMP_DIR/hysteria"
+  HY2_HASHES="$HY2_TEMP_DIR/hashes.txt"
+  HY2_BASE_URL="https://github.com/apernet/hysteria/releases/latest/download"
+
+  if ! download_file "$HY2_BASE_URL/$HY2_ASSET" "$HY2_DOWNLOAD" ||
+     ! download_file "$HY2_BASE_URL/hashes.txt" "$HY2_HASHES"; then
+    cleanup_hy2_download
+    error "Hysteria2 下载失败"
+    return 1
+  fi
+
+  EXPECTED_SHA256="$(awk -v name="build/$HY2_ASSET" '$2 == name {print $1; exit}' "$HY2_HASHES" | tr 'A-F' 'a-f')"
+  ACTUAL_SHA256="$(file_sha256 "$HY2_DOWNLOAD" | tr 'A-F' 'a-f')"
+  if ! printf '%s\n' "$EXPECTED_SHA256" | grep -Eq '^[0-9a-f]{64}$' ||
+     [ "$EXPECTED_SHA256" != "$ACTUAL_SHA256" ]; then
+    cleanup_hy2_download
+    error "Hysteria2 SHA-256 校验失败"
+    return 1
+  fi
+
+  chmod 700 "$HY2_DOWNLOAD"
+  if ! "$HY2_DOWNLOAD" version >/dev/null 2>&1; then
+    cleanup_hy2_download
+    error "Hysteria2 二进制无法执行"
+    return 1
+  fi
+
+  rm -f "$HY2_BINARY_BACKUP" "$HY2_BINARY_NEW"
+  if [ -f "$HY2_BINARY" ]; then
+    cp -p "$HY2_BINARY" "$HY2_BINARY_BACKUP"
+    HAD_HY2_BINARY=1
+  else
+    HAD_HY2_BINARY=0
+  fi
+  install -m 755 "$HY2_DOWNLOAD" "$HY2_BINARY_NEW"
+  if ! "$HY2_BINARY_NEW" version >/dev/null 2>&1; then
+    rm -f "$HY2_BINARY_NEW"
+    cleanup_hy2_download
+    error "安装后的 Hysteria2 二进制自检失败"
+    return 1
+  fi
+  mv -f "$HY2_BINARY_NEW" "$HY2_BINARY"
+  HY2_INSTALL_PENDING=1
+  cleanup_hy2_download
+}
+
+restore_hy2_binary() {
+  [ "$HY2_INSTALL_PENDING" -eq 1 ] || return 0
+  rm -f "$HY2_BINARY"
+  if [ "$HAD_HY2_BINARY" -eq 1 ]; then
+    mv -f "$HY2_BINARY_BACKUP" "$HY2_BINARY"
+  else
+    rm -f "$HY2_BINARY_BACKUP"
+  fi
+  HY2_INSTALL_PENDING=0
+}
+
+finalize_hy2_binary() {
+  rm -f "$HY2_BINARY_BACKUP" "$HY2_BINARY_NEW"
+  HY2_INSTALL_PENDING=0
+}
+
+cleanup_pending_hy2() {
+  if [ "$HY2_INSTALL_PENDING" -eq 1 ]; then
+    restore_hy2_binary
+  fi
 }
 
 stop_existing_hy2() {
@@ -198,6 +330,85 @@ stop_existing_hy2() {
     rc-service hysteria stop >/dev/null 2>&1 || true
   fi
   pkill -f "/usr/local/bin/hysteria server --config $CONFIG_FILE" 2>/dev/null || true
+}
+
+start_configured_service() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    write_systemd_service
+  elif command -v rc-service >/dev/null 2>&1; then
+    write_openrc_service
+  else
+    write_fallback_launcher
+  fi
+}
+
+service_is_running() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    systemctl is-active --quiet hysteria-server.service
+  elif command -v rc-service >/dev/null 2>&1; then
+    rc-service hysteria status >/dev/null 2>&1
+  else
+    pgrep -f "/usr/local/bin/hysteria server --config $CONFIG_FILE" >/dev/null 2>&1
+  fi
+}
+
+wait_for_service_port() {
+  ATTEMPT=0
+  while [ "$ATTEMPT" -lt 10 ]; do
+    if service_is_running && is_udp_port_in_use "$PORT"; then
+      return 0
+    fi
+    ATTEMPT=$((ATTEMPT + 1))
+    sleep 1
+  done
+  return 1
+}
+
+activate_config() {
+  HAD_CONFIG=0
+  HAD_CERT=0
+  HAD_KEY=0
+  rm -f "$CONFIG_BACKUP" "$CERT_BACKUP" "$KEY_BACKUP"
+
+  if [ -f "$CONFIG_FILE" ]; then
+    cp -p "$CONFIG_FILE" "$CONFIG_BACKUP"
+    HAD_CONFIG=1
+  fi
+  if [ -f "$CERT_FILE" ]; then
+    cp -p "$CERT_FILE" "$CERT_BACKUP"
+    HAD_CERT=1
+  fi
+  if [ -f "$KEY_FILE" ]; then
+    cp -p "$KEY_FILE" "$KEY_BACKUP"
+    HAD_KEY=1
+  fi
+
+  stop_existing_hy2
+  mv -f "$CONFIG_NEW" "$CONFIG_FILE"
+  mv -f "$CERT_NEW" "$CERT_FILE"
+  mv -f "$KEY_NEW" "$KEY_FILE"
+
+  if start_configured_service && wait_for_service_port; then
+    finalize_hy2_binary
+    rm -f "$CONFIG_BACKUP" "$CERT_BACKUP" "$KEY_BACKUP"
+    return 0
+  fi
+
+  error "新配置启动失败，正在恢复旧配置和证书"
+  stop_existing_hy2
+  rm -f "$CONFIG_FILE" "$CERT_FILE" "$KEY_FILE"
+  if [ "$HAD_CONFIG" -eq 1 ]; then mv -f "$CONFIG_BACKUP" "$CONFIG_FILE"; fi
+  if [ "$HAD_CERT" -eq 1 ]; then mv -f "$CERT_BACKUP" "$CERT_FILE"; fi
+  if [ "$HAD_KEY" -eq 1 ]; then mv -f "$KEY_BACKUP" "$KEY_FILE"; fi
+
+  restore_hy2_binary
+  if [ "$HAD_CONFIG" -eq 1 ]; then
+    if ! start_configured_service; then
+      warn "旧配置已恢复，但旧服务重启失败，请手动检查"
+    fi
+  fi
+  rm -f "$CONFIG_BACKUP" "$CERT_BACKUP" "$KEY_BACKUP"
+  return 1
 }
 
 write_systemd_service() {
@@ -217,8 +428,8 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 SERVICE
 
-  systemctl daemon-reload
-  systemctl enable --now hysteria-server.service
+  systemctl daemon-reload &&
+  systemctl enable --now hysteria-server.service &&
   systemctl restart hysteria-server.service
 }
 
@@ -279,7 +490,7 @@ show_final_summary() {
   printf '%b%s%b\n' "$GREEN" "$SNI" "$RESET"
   echo
   printf '%b%s%b\n' "$BOLD$BLUE" "HY2 链接" "$RESET"
-  printf '%b%s%b\n' "$YELLOW" "hy2://${PASSWORD}@${PUBLIC_IP}:${PORT}?insecure=1&sni=${SNI}#HY2-${PUBLIC_IP}-${PORT}" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "hy2://${PASSWORD}@${URI_HOST}:${PORT}?insecure=1&sni=${SNI}#HY2-${PUBLIC_IP}-${PORT}" "$RESET"
   echo
   printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
@@ -301,7 +512,7 @@ SNI：$SNI
 证书：自签证书，客户端需要开启 insecure / 跳过证书验证
 
 链接：
-hy2://${PASSWORD}@${PUBLIC_IP}:${PORT}?insecure=1&sni=${SNI}#HY2-${PUBLIC_IP}-${PORT}
+hy2://${PASSWORD}@${URI_HOST}:${PORT}?insecure=1&sni=${SNI}#HY2-${PUBLIC_IP}-${PORT}
 
 ===== 常用命令 =====
 查看节点信息：/root/install-hy2.sh info
@@ -317,7 +528,9 @@ systemctl status hysteria-server.service --no-pager -l
 $NODE_INFO_COPY
 INFO
 
+  chmod 600 "$NODE_INFO_FILE"
   cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
+  chmod 600 "$NODE_INFO_COPY" 2>/dev/null || true
 }
 
 case "${1:-}" in
@@ -342,24 +555,27 @@ if [ "${1:-}" != "install" ] && [ "${1:-}" != "--install" ]; then
 fi
 
 install_deps
-stop_existing_hy2
 
 PUBLIC_IP="$(detect_ip)"
+URI_HOST="$(uri_host "$PUBLIC_IP")"
 PORT="$(prompt_port)"
 PASSWORD="$(make_password)"
 
+trap cleanup_pending_hy2 EXIT
 install_hysteria_binary
 
 mkdir -p "$CERT_DIR" /etc/hysteria
+rm -f "$CONFIG_NEW" "$CERT_NEW" "$KEY_NEW"
 openssl req -x509 -nodes -newkey rsa:2048 \
-  -keyout "$CERT_DIR/server.key" \
-  -out "$CERT_DIR/server.crt" \
+  -keyout "$KEY_NEW" \
+  -out "$CERT_NEW" \
   -days 36500 \
   -subj "/CN=${SNI}"
 
-chmod 644 "$CERT_DIR/server.crt" "$CERT_DIR/server.key"
+chmod 644 "$CERT_NEW"
+chmod 600 "$KEY_NEW"
 
-cat >"$CONFIG_FILE" <<CONFIG
+cat >"$CONFIG_NEW" <<CONFIG
 listen: :${PORT}
 
 tls:
@@ -377,13 +593,8 @@ masquerade:
     rewriteHost: true
 CONFIG
 
-if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-  write_systemd_service
-elif command -v rc-service >/dev/null 2>&1; then
-  write_openrc_service
-else
-  write_fallback_launcher
-fi
+chmod 600 "$CONFIG_NEW"
+activate_config
 
 write_node_info
 

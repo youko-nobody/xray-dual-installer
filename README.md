@@ -137,13 +137,14 @@ wget -O /root/install-ss2022.sh https://raw.githubusercontent.com/youko-nobody/x
 
 ## 独立部署说明
 
-现在 `Reality`、`SOCKS5`、`AnyTLS` 和 `SS2022` 都使用独立服务，可以在同一台机器上同时存在，不会互相覆盖。
+现在 `Reality`、`Xray 双节点`、`SOCKS5`、`AnyTLS` 和 `SS2022` 都使用独立服务及配置，可以在同一台机器上同时存在，不会互相覆盖；部署时仍需保证监听端口不冲突。
 
 对应关系如下：
 
 | 节点 | 独立服务名 | 独立配置文件 |
 | --- | --- | --- |
 | Reality | `xray-reality` | `/usr/local/etc/xray/reality-config.json` |
+| Xray 双节点 | `xray` | `/usr/local/etc/xray/config.json` |
 | SOCKS5 | `xray-socks5` | `/usr/local/etc/xray/socks5-config.json` |
 | AnyTLS | `sing-box-anytls` | `/etc/sing-box-anytls/config.json` |
 | SS2022 | `sing-box-ss2022` | `/etc/sing-box-ss2022/config.json` |
@@ -158,7 +159,7 @@ wget -O /root/install-ss2022.sh https://raw.githubusercontent.com/youko-nobody/x
 - `AnyTLS`
 - `SS2022`
 
-其中只有 `VLESS + Reality + VLESS + WS` 双节点脚本，仍然是它自己单独占用一套 Xray 配置。
+其中 `Reality`、`Xray 双节点` 和 `SOCKS5` 共享 `/usr/local/bin/xray` 二进制，但分别使用 `xray-reality`、`xray`、`xray-socks5` 服务以及各自的配置文件。
 
 ## 功能说明
 
@@ -305,7 +306,7 @@ wget -O /root/uninstall-ss2022.sh https://raw.githubusercontent.com/youko-nobody
 - 服务端启动参数 `-S` 使用的是纯 32 位十六进制 secret
 - Telegram 客户端导入链接使用的是带 `dd` 前缀的 secret
 - 也就是：服务端和客户端看到的 secret 不完全一样，这是正常的
-- 重新安装 MTProto 时，脚本会先清理旧的节点信息和旧运行残留，再生成新的配置
+- 重新安装 MTProto 时，新运行数据和服务配置通过启动检查后才会生效；失败会恢复旧服务
 
 输出的链接格式为：
 
@@ -369,7 +370,7 @@ SS2022-端口 = ss, 服务器地址, 端口, encrypt-method=2022-blake3-aes-128-
 - `WS`：TCP
 - `HY2`：UDP
 - `Snell`：TCP
-- `SOCKS5`：TCP
+- `SOCKS5`：TCP + UDP
 - `MTProto`：TCP
 - `AnyTLS`：TCP；自动 ACME 模式还需要 TCP 80
 - `SS2022`：TCP + UDP，二者使用同一个端口
@@ -379,7 +380,9 @@ SS2022-端口 = ss, 服务器地址, 端口, encrypt-method=2022-blake3-aes-128-
 ### 查看 Xray 配置测试
 
 ```sh
-xray run -test -config /usr/local/etc/xray/config.json
+/usr/local/bin/xray run -test -config /usr/local/etc/xray/reality-config.json
+/usr/local/bin/xray run -test -config /usr/local/etc/xray/config.json
+/usr/local/bin/xray run -test -config /usr/local/etc/xray/socks5-config.json
 ```
 
 ### 查看 Xray 监听
@@ -426,7 +429,9 @@ ss -lnup | grep sing-box-ss2022
 ### Debian / Ubuntu
 
 ```sh
+systemctl status xray-reality --no-pager -l
 systemctl status xray --no-pager
+systemctl status xray-socks5 --no-pager -l
 systemctl status hysteria-server.service --no-pager -l
 systemctl status snell --no-pager -l
 systemctl status mtproxy --no-pager -l
@@ -437,7 +442,9 @@ systemctl status sing-box-ss2022 --no-pager -l
 ### Alpine
 
 ```sh
+rc-service xray-reality status
 rc-service xray status
+rc-service xray-socks5 status
 rc-service hysteria status
 rc-service snell status
 rc-service mtproxy status
@@ -449,7 +456,9 @@ rc-service sing-box-ss2022 status
 
 | 文件 | 说明 |
 | --- | --- |
-| `/usr/local/etc/xray/config.json` | Xray 配置 |
+| `/usr/local/etc/xray/reality-config.json` | Reality 单节点配置，服务名 `xray-reality` |
+| `/usr/local/etc/xray/config.json` | Xray 双节点配置，服务名 `xray` |
+| `/usr/local/etc/xray/socks5-config.json` | SOCKS5 配置，服务名 `xray-socks5` |
 | `/etc/hysteria/config.yaml` | HY2 配置 |
 | `/etc/snell/snell-server.conf` | Snell 配置 |
 | `/etc/mtproto-proxy` | MTProto 配置目录 |

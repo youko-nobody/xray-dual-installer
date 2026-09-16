@@ -1,10 +1,19 @@
 #!/bin/sh
 set -e
+umask 077
 
 SNI="www.sony.com"
 WS_PATH="/ws"
+CONFIG_FILE="/usr/local/etc/xray/config.json"
+CONFIG_NEW="${CONFIG_FILE}.new.$$"
+CONFIG_BACKUP="${CONFIG_FILE}.bak.$$"
 NODE_INFO_FILE="/usr/local/etc/xray/node-info.txt"
 NODE_INFO_COPY="/root/xray-node-info.txt"
+XRAY_BINARY="/usr/local/bin/xray"
+XRAY_BINARY_NEW="${XRAY_BINARY}.new.$$"
+XRAY_BINARY_BACKUP="${XRAY_BINARY}.bak.$$"
+XRAY_INSTALL_PENDING=0
+HAD_XRAY_BINARY=0
 
 if [ -t 1 ]; then
   RED="$(printf '\033[31m')"
@@ -135,6 +144,13 @@ detect_ip() {
   printf '%s' "$IP"
 }
 
+uri_host() {
+  case "$1" in
+    *:*) printf '[%s]' "$1" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
 detect_xray_zip() {
   ARCH="$(uname -m)"
   case "$ARCH" in
@@ -148,6 +164,107 @@ detect_xray_zip() {
   esac
 }
 
+download_file() {
+  DOWNLOAD_URL="$1"
+  DOWNLOAD_PATH="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$DOWNLOAD_PATH" "$DOWNLOAD_URL"
+  else
+    wget -qO "$DOWNLOAD_PATH" "$DOWNLOAD_URL"
+  fi
+}
+
+file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    openssl dgst -sha256 "$1" | awk '{print $NF}'
+  fi
+}
+
+cleanup_xray_download() {
+  rm -f "$XRAY_TEMP_DIR/xray.zip" "$XRAY_TEMP_DIR/xray.zip.dgst"
+  rm -f "$XRAY_TEMP_DIR/extract/xray"
+  rmdir "$XRAY_TEMP_DIR/extract" 2>/dev/null || true
+  rmdir "$XRAY_TEMP_DIR" 2>/dev/null || true
+}
+
+install_xray_binary() {
+  XRAY_TEMP_DIR="$(mktemp -d /tmp/xray-install.XXXXXX)"
+  XRAY_ARCHIVE="$XRAY_TEMP_DIR/xray.zip"
+  XRAY_DIGEST="$XRAY_TEMP_DIR/xray.zip.dgst"
+  XRAY_BASE_URL="https://github.com/XTLS/Xray-core/releases/latest/download"
+
+  if ! download_file "$XRAY_BASE_URL/$XRAY_ZIP" "$XRAY_ARCHIVE" ||
+     ! download_file "$XRAY_BASE_URL/${XRAY_ZIP}.dgst" "$XRAY_DIGEST"; then
+    cleanup_xray_download
+    error "Xray 下载失败"
+    return 1
+  fi
+
+  EXPECTED_SHA256="$(awk -F'= *' '/^SHA2-256=/ {print $2; exit}' "$XRAY_DIGEST" | tr 'A-F' 'a-f')"
+  ACTUAL_SHA256="$(file_sha256 "$XRAY_ARCHIVE" | tr 'A-F' 'a-f')"
+  if ! printf '%s\n' "$EXPECTED_SHA256" | grep -Eq '^[0-9a-f]{64}$' ||
+     [ "$EXPECTED_SHA256" != "$ACTUAL_SHA256" ]; then
+    cleanup_xray_download
+    error "Xray SHA-256 校验失败"
+    return 1
+  fi
+
+  if ! unzip -tq "$XRAY_ARCHIVE" >/dev/null 2>&1; then
+    cleanup_xray_download
+    error "Xray 压缩包校验失败"
+    return 1
+  fi
+  mkdir -p "$XRAY_TEMP_DIR/extract"
+  if ! unzip -oq "$XRAY_ARCHIVE" xray -d "$XRAY_TEMP_DIR/extract" ||
+     ! "$XRAY_TEMP_DIR/extract/xray" version >/dev/null 2>&1; then
+    cleanup_xray_download
+    error "Xray 二进制无法执行"
+    return 1
+  fi
+
+  rm -f "$XRAY_BINARY_BACKUP" "$XRAY_BINARY_NEW"
+  if [ -f "$XRAY_BINARY" ]; then
+    cp -p "$XRAY_BINARY" "$XRAY_BINARY_BACKUP"
+    HAD_XRAY_BINARY=1
+  else
+    HAD_XRAY_BINARY=0
+  fi
+  install -m 755 "$XRAY_TEMP_DIR/extract/xray" "$XRAY_BINARY_NEW"
+  if ! "$XRAY_BINARY_NEW" version >/dev/null 2>&1; then
+    rm -f "$XRAY_BINARY_NEW"
+    cleanup_xray_download
+    error "安装后的 Xray 二进制自检失败"
+    return 1
+  fi
+  mv -f "$XRAY_BINARY_NEW" "$XRAY_BINARY"
+  XRAY_INSTALL_PENDING=1
+  cleanup_xray_download
+}
+
+restore_xray_binary() {
+  [ "$XRAY_INSTALL_PENDING" -eq 1 ] || return 0
+  rm -f "$XRAY_BINARY"
+  if [ "$HAD_XRAY_BINARY" -eq 1 ]; then
+    mv -f "$XRAY_BINARY_BACKUP" "$XRAY_BINARY"
+  else
+    rm -f "$XRAY_BINARY_BACKUP"
+  fi
+  XRAY_INSTALL_PENDING=0
+}
+
+finalize_xray_binary() {
+  rm -f "$XRAY_BINARY_BACKUP" "$XRAY_BINARY_NEW"
+  XRAY_INSTALL_PENDING=0
+}
+
+cleanup_pending_xray() {
+  if [ "$XRAY_INSTALL_PENDING" -eq 1 ]; then
+    restore_xray_binary
+  fi
+}
+
 is_port_in_use() {
   PORT_TO_CHECK="$1"
   if command -v ss >/dev/null 2>&1; then
@@ -159,6 +276,11 @@ is_port_in_use() {
     return $?
   fi
   return 1
+}
+
+current_config_uses_port() {
+  [ -f "$CONFIG_FILE" ] &&
+    grep -Eq '"port"[[:space:]]*:[[:space:]]*'"$1"'([,[:space:]]|$)' "$CONFIG_FILE"
 }
 
 random_port() {
@@ -207,8 +329,10 @@ prompt_port() {
     fi
 
     if is_port_in_use "$INPUT_VALUE"; then
-      warn "端口已被占用：$INPUT_VALUE"
-      continue
+      if ! current_config_uses_port "$INPUT_VALUE" || ! service_is_running; then
+        warn "端口已被占用：$INPUT_VALUE"
+        continue
+      fi
     fi
 
     printf '%s' "$INPUT_VALUE"
@@ -233,7 +357,7 @@ LimitNOFILE=1048576
 WantedBy=multi-user.target
 SERVICE
 
-  systemctl daemon-reload
+  systemctl daemon-reload &&
   systemctl enable --now xray
 }
 
@@ -281,6 +405,73 @@ stop_existing_xray() {
   pkill -f "/usr/local/bin/xray run -config /usr/local/etc/xray/config.json" 2>/dev/null || true
 }
 
+start_configured_service() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    write_systemd_service
+  elif command -v rc-service >/dev/null 2>&1; then
+    write_openrc_service
+  else
+    write_fallback_launcher
+  fi
+}
+
+service_is_running() {
+  if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    systemctl is-active --quiet xray
+  elif command -v rc-service >/dev/null 2>&1; then
+    rc-service xray status >/dev/null 2>&1
+  else
+    pgrep -f "/usr/local/bin/xray run -config $CONFIG_FILE" >/dev/null 2>&1
+  fi
+}
+
+wait_for_service_ports() {
+  ATTEMPT=0
+  while [ "$ATTEMPT" -lt 10 ]; do
+    if service_is_running &&
+       is_port_in_use "$REALITY_PORT" &&
+       is_port_in_use "$WS_PORT"; then
+      return 0
+    fi
+    ATTEMPT=$((ATTEMPT + 1))
+    sleep 1
+  done
+  return 1
+}
+
+activate_config() {
+  HAD_CONFIG=0
+  rm -f "$CONFIG_BACKUP"
+  if [ -f "$CONFIG_FILE" ]; then
+    cp -p "$CONFIG_FILE" "$CONFIG_BACKUP"
+    HAD_CONFIG=1
+  fi
+
+  stop_existing_xray
+  mv -f "$CONFIG_NEW" "$CONFIG_FILE"
+
+  if start_configured_service && wait_for_service_ports; then
+    finalize_xray_binary
+    rm -f "$CONFIG_BACKUP"
+    return 0
+  fi
+
+  error "新配置启动失败，正在恢复旧配置"
+  stop_existing_xray
+  rm -f "$CONFIG_FILE"
+  if [ "$HAD_CONFIG" -eq 1 ]; then
+    mv -f "$CONFIG_BACKUP" "$CONFIG_FILE"
+    restore_xray_binary
+    if ! start_configured_service; then
+      warn "旧配置已恢复，但旧服务重启失败，请手动检查"
+    fi
+  else
+    restore_xray_binary
+    rm -f "$CONFIG_BACKUP"
+  fi
+  return 1
+}
+
 show_status() {
   if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
     systemctl status xray --no-pager -l || true
@@ -308,7 +499,7 @@ show_final_summary() {
   printf '%b%s%b\n' "$GREEN" "$PUBLIC_KEY" "$RESET"
   printf '%b%s%b\n' "$CYAN" "Short ID：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$SHORT_ID" "$RESET"
-  printf '%b%s%b\n' "$YELLOW" "vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "vless://${REALITY_UUID}@${URI_HOST}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}" "$RESET"
   echo
   printf '%b%s%b\n' "$BOLD$BLUE" "WS 节点" "$RESET"
   printf '%b%s%b\n' "$CYAN" "端口：" "$RESET"
@@ -317,7 +508,7 @@ show_final_summary() {
   printf '%b%s%b\n' "$GREEN" "$WS_PATH" "$RESET"
   printf '%b%s%b\n' "$CYAN" "UUID：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$WS_UUID" "$RESET"
-  printf '%b%s%b\n' "$YELLOW" "vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "vless://${WS_UUID}@${URI_HOST}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}" "$RESET"
   echo
   printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
@@ -337,14 +528,14 @@ UUID：$REALITY_UUID
 PublicKey：$PUBLIC_KEY
 Short ID：$SHORT_ID
 链接：
-vless://${REALITY_UUID}@${PUBLIC_IP}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}
+vless://${REALITY_UUID}@${URI_HOST}:${REALITY_PORT}?type=tcp&security=reality&pbk=${PUBLIC_KEY}&fp=chrome&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#Reality-${PUBLIC_IP}-${REALITY_PORT}
 
 ===== WS 节点 =====
 端口：$WS_PORT
 路径：$WS_PATH
 UUID：$WS_UUID
 链接：
-vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}
+vless://${WS_UUID}@${URI_HOST}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-${PUBLIC_IP}-${WS_PORT}
 
 ===== 常用命令 =====
 查看节点信息：/root/install-xray-dual-auto.sh info
@@ -355,7 +546,9 @@ vless://${WS_UUID}@${PUBLIC_IP}:${WS_PORT}?type=ws&security=none&path=%2Fws#WS-$
 $NODE_INFO_COPY
 INFO
 
+  chmod 600 "$NODE_INFO_FILE"
   cp "$NODE_INFO_FILE" "$NODE_INFO_COPY" 2>/dev/null || true
+  chmod 600 "$NODE_INFO_COPY" 2>/dev/null || true
 }
 
 case "${1:-}" in
@@ -380,9 +573,13 @@ if [ "${1:-}" != "install" ] && [ "${1:-}" != "--install" ]; then
 fi
 
 install_deps
-stop_existing_xray
 
 PUBLIC_IP="$(detect_ip)"
+URI_HOST="$(uri_host "$PUBLIC_IP")"
+case "$PUBLIC_IP" in
+  *:*) LISTEN_ADDRESS="::" ;;
+  *) LISTEN_ADDRESS="0.0.0.0" ;;
+esac
 XRAY_ZIP="$(detect_xray_zip)"
 DEFAULT_REALITY_PORT="$(random_port)"
 DEFAULT_WS_PORT="$(random_port)"
@@ -400,11 +597,8 @@ if [ "$REALITY_PORT" = "$WS_PORT" ]; then
   exit 1
 fi
 
-cd /root
-rm -f xray.zip xray
-wget -O xray.zip "https://github.com/XTLS/Xray-core/releases/latest/download/${XRAY_ZIP}"
-unzip -o xray.zip
-install -m 755 xray /usr/local/bin/xray
+trap cleanup_pending_xray EXIT
+install_xray_binary
 mkdir -p /usr/local/etc/xray
 touch /var/log/xray-access.log /var/log/xray-error.log
 
@@ -415,7 +609,8 @@ PRIVATE_KEY="$(echo "$KEYS" | awk -F': ' '/PrivateKey/ {print $2}')"
 PUBLIC_KEY="$(echo "$KEYS" | awk -F': ' '/Password \(PublicKey\)/ {print $2}')"
 SHORT_ID="$(openssl rand -hex 8)"
 
-cat >/usr/local/etc/xray/config.json <<CONFIG
+rm -f "$CONFIG_NEW"
+cat >"$CONFIG_NEW" <<CONFIG
 {
   "log": {
     "access": "/var/log/xray-access.log",
@@ -424,7 +619,7 @@ cat >/usr/local/etc/xray/config.json <<CONFIG
   },
   "inbounds": [
     {
-      "listen": "0.0.0.0",
+      "listen": "$LISTEN_ADDRESS",
       "port": ${REALITY_PORT},
       "protocol": "vless",
       "settings": {
@@ -454,7 +649,7 @@ cat >/usr/local/etc/xray/config.json <<CONFIG
       }
     },
     {
-      "listen": "0.0.0.0",
+      "listen": "$LISTEN_ADDRESS",
       "port": ${WS_PORT},
       "protocol": "vless",
       "settings": {
@@ -491,15 +686,9 @@ cat >/usr/local/etc/xray/config.json <<CONFIG
 }
 CONFIG
 
-/usr/local/bin/xray run -test -config /usr/local/etc/xray/config.json
-
-if command -v systemctl >/dev/null 2>&1 && [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
-  write_systemd_service
-elif command -v rc-service >/dev/null 2>&1; then
-  write_openrc_service
-else
-  write_fallback_launcher
-fi
+chmod 600 "$CONFIG_NEW"
+/usr/local/bin/xray run -test -config "$CONFIG_NEW"
+activate_config
 
 write_node_info
 

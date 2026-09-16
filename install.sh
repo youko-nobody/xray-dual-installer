@@ -37,26 +37,52 @@ require_root() {
 fetch_file() {
   REMOTE_NAME="$1"
   LOCAL_PATH="$2"
+  TEMP_PATH="${LOCAL_PATH}.tmp.$$"
   info "正在获取脚本：$REMOTE_NAME"
+  rm -f "$TEMP_PATH"
+
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "$LOCAL_PATH" "$BASE_URL/$REMOTE_NAME"
+    if ! curl -fsSL -o "$TEMP_PATH" "$BASE_URL/$REMOTE_NAME"; then
+      rm -f "$TEMP_PATH"
+      return 1
+    fi
   elif command -v wget >/dev/null 2>&1; then
-    wget -O "$LOCAL_PATH" "$BASE_URL/$REMOTE_NAME"
+    if ! wget -qO "$TEMP_PATH" "$BASE_URL/$REMOTE_NAME"; then
+      rm -f "$TEMP_PATH"
+      return 1
+    fi
   else
     error "未找到 curl 或 wget，无法下载脚本"
-    exit 1
+    return 1
   fi
+
+  if [ ! -s "$TEMP_PATH" ]; then
+    error "下载到的脚本为空：$REMOTE_NAME"
+    rm -f "$TEMP_PATH"
+    return 1
+  fi
+
+  chmod +x "$TEMP_PATH"
+  mv -f "$TEMP_PATH" "$LOCAL_PATH"
   chmod +x "$LOCAL_PATH"
 }
 
 ensure_script() {
   REMOTE_NAME="$1"
   LOCAL_PATH="$2"
-  if [ ! -f "$LOCAL_PATH" ]; then
-    fetch_file "$REMOTE_NAME" "$LOCAL_PATH"
-  else
-    chmod +x "$LOCAL_PATH"
+
+  if fetch_file "$REMOTE_NAME" "$LOCAL_PATH"; then
+    return 0
   fi
+
+  if [ -s "$LOCAL_PATH" ]; then
+    warn "刷新失败，继续使用本地缓存：$LOCAL_PATH"
+    chmod +x "$LOCAL_PATH"
+    return 0
+  fi
+
+  error "脚本下载失败，且没有可用缓存：$REMOTE_NAME"
+  return 1
 }
 
 node_is_saved() {
@@ -92,6 +118,28 @@ print_info_menu_item() {
   fi
 }
 
+print_main_menu_item() {
+  ITEM_NUMBER="$1"
+  ITEM_LABEL="$2"
+  NODE_FILE="$3"
+  if node_is_saved "$NODE_FILE"; then
+    printf '%b%s. %s（已保存）%b\n' "$BOLD$GREEN" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
+  else
+    printf '%b%s.%b %s\n' "$GREEN" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
+  fi
+}
+
+print_uninstall_menu_item() {
+  ITEM_NUMBER="$1"
+  ITEM_LABEL="$2"
+  NODE_FILE="$3"
+  if node_is_saved "$NODE_FILE"; then
+    printf '%b%s. %s（已保存）%b\n' "$BOLD$RED" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
+  else
+    printf '%b%s.%b %s\n' "$YELLOW" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
+  fi
+}
+
 show_saved_overview() {
   headline "===== 已保存节点总览 ====="
   echo
@@ -110,7 +158,7 @@ run_remote_script() {
   REMOTE_NAME="$1"
   LOCAL_PATH="$2"
   ACTION="${3:-install}"
-  fetch_file "$REMOTE_NAME" "$LOCAL_PATH"
+  ensure_script "$REMOTE_NAME" "$LOCAL_PATH"
   "$LOCAL_PATH" "$ACTION"
 }
 
@@ -122,19 +170,19 @@ pause_hint() {
 show_menu() {
   headline "===== 综合节点一键脚本 ====="
   echo
-  printf '%b1.%b VLESS + Reality 单节点\n' "$GREEN" "$RESET"
-  printf '%b2.%b VLESS + Reality + VLESS + WS 双节点\n' "$GREEN" "$RESET"
-  printf '%b3.%b Hysteria2 / HY2 节点\n' "$GREEN" "$RESET"
-  printf '%b4.%b Snell v6 节点\n' "$GREEN" "$RESET"
-  printf '%b5.%b SOCKS5 节点\n' "$GREEN" "$RESET"
-  printf '%b6.%b MTProto 节点\n' "$GREEN" "$RESET"
-  printf '%b7.%b AnyTLS 节点\n' "$GREEN" "$RESET"
-  printf '%b8.%b Shadowsocks 2022 节点\n' "$GREEN" "$RESET"
+  print_main_menu_item 1 "VLESS + Reality 单节点" "/usr/local/etc/xray/reality-node-info.txt"
+  print_main_menu_item 2 "VLESS + Reality + VLESS + WS 双节点" "/usr/local/etc/xray/node-info.txt"
+  print_main_menu_item 3 "Hysteria2 / HY2 节点" "/etc/hysteria/node-info.txt"
+  print_main_menu_item 4 "Snell v6 节点" "/etc/snell/node-info.txt"
+  print_main_menu_item 5 "SOCKS5 节点" "/usr/local/etc/xray/socks5-node-info.txt"
+  print_main_menu_item 6 "MTProto 节点" "/etc/mtproto-proxy/node-info.txt"
+  print_main_menu_item 7 "AnyTLS 节点" "/etc/sing-box-anytls/node-info.txt"
+  print_main_menu_item 8 "Shadowsocks 2022 节点" "/etc/sing-box-ss2022/node-info.txt"
   printf '%b9.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
   printf '%b10.%b 卸载节点\n' "$YELLOW" "$RESET"
   printf '%b0.%b 退出\n' "$RED" "$RESET"
   echo
-  warn "提示：Reality、SOCKS5、AnyTLS 与 SS2022 可独立共存；双节点仍会占用自己的 Xray 配置。"
+  warn "提示：Reality、双节点、SOCKS5、AnyTLS 与 SS2022 可共存；前三者共享 Xray 二进制，但服务和配置相互独立，请避免端口冲突。"
 }
 
 show_info_menu() {
@@ -187,15 +235,15 @@ show_info_menu() {
 show_uninstall_menu() {
   headline "===== 卸载节点 ====="
   echo
-  printf '%b1.%b 卸载单 Reality 节点\n' "$YELLOW" "$RESET"
-  printf '%b2.%b 卸载 Xray 双节点\n' "$YELLOW" "$RESET"
-  printf '%b3.%b 卸载 HY2 节点\n' "$YELLOW" "$RESET"
-  printf '%b4.%b 卸载 Snell v6 节点\n' "$YELLOW" "$RESET"
-  printf '%b5.%b 卸载 SOCKS5 节点\n' "$YELLOW" "$RESET"
-  printf '%b6.%b 卸载 MTProto 节点\n' "$YELLOW" "$RESET"
-  printf '%b7.%b 卸载 AnyTLS 节点\n' "$YELLOW" "$RESET"
-  printf '%b8.%b 卸载 SS2022 节点\n' "$YELLOW" "$RESET"
-  printf '%b9.%b 卸载 Xray + HY2 + Snell + SOCKS5 + MTProto + AnyTLS + SS2022 全部节点\n' "$RED" "$RESET"
+  print_uninstall_menu_item 1 "卸载单 Reality 节点" "/usr/local/etc/xray/reality-node-info.txt"
+  print_uninstall_menu_item 2 "卸载 Xray 双节点" "/usr/local/etc/xray/node-info.txt"
+  print_uninstall_menu_item 3 "卸载 HY2 节点" "/etc/hysteria/node-info.txt"
+  print_uninstall_menu_item 4 "卸载 Snell v6 节点" "/etc/snell/node-info.txt"
+  print_uninstall_menu_item 5 "卸载 SOCKS5 节点" "/usr/local/etc/xray/socks5-node-info.txt"
+  print_uninstall_menu_item 6 "卸载 MTProto 节点" "/etc/mtproto-proxy/node-info.txt"
+  print_uninstall_menu_item 7 "卸载 AnyTLS 节点" "/etc/sing-box-anytls/node-info.txt"
+  print_uninstall_menu_item 8 "卸载 SS2022 节点" "/etc/sing-box-ss2022/node-info.txt"
+  printf '%b9.%b 卸载全部已保存节点\n' "$RED" "$RESET"
   printf '%b0.%b 返回\n' "$CYAN" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -210,10 +258,11 @@ show_uninstall_menu() {
     7) run_remote_script "uninstall-anytls.sh" "/root/uninstall-anytls.sh" ;;
     8) run_remote_script "uninstall-ss2022.sh" "/root/uninstall-ss2022.sh" ;;
     9)
-      warn "即将卸载 Xray、HY2、Snell、SOCKS5、MTProto、AnyTLS、SS2022 相关节点。"
+      warn "即将卸载 Reality、Xray 双节点、HY2、Snell、SOCKS5、MTProto、AnyTLS、SS2022 节点。"
       printf '确认卸载全部？输入 yes 继续: '
       read -r CONFIRM || CONFIRM=""
       if [ "$CONFIRM" = "yes" ]; then
+        run_remote_script "uninstall-reality.sh" "/root/uninstall-reality.sh"
         run_remote_script "uninstall-xray-dual.sh" "/root/uninstall-xray-dual.sh"
         run_remote_script "uninstall-hy2.sh" "/root/uninstall-hy2.sh"
         run_remote_script "uninstall-snell.sh" "/root/uninstall-snell.sh"

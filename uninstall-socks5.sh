@@ -2,7 +2,8 @@
 set -e
 
 SERVICE_NAME="xray-socks5"
-CONFIG_FILE="/usr/local/etc/xray/socks5-config.json"
+CONFIG_DIR="/usr/local/etc/xray"
+CONFIG_FILE="$CONFIG_DIR/socks5-config.json"
 
 stop_systemd_service() {
   service_name="$1"
@@ -22,6 +23,15 @@ stop_openrc_service() {
   fi
 }
 
+cleanup_shared_xray() {
+  if [ ! -f "$CONFIG_DIR/config.json" ] &&
+     [ ! -f "$CONFIG_DIR/reality-config.json" ] &&
+     [ ! -f "$CONFIG_DIR/socks5-config.json" ]; then
+    rm -f /usr/local/bin/xray
+  fi
+  rmdir "$CONFIG_DIR" 2>/dev/null || true
+}
+
 pkill -f "run -config $CONFIG_FILE" 2>/dev/null || true
 stop_systemd_service "$SERVICE_NAME"
 stop_openrc_service "$SERVICE_NAME"
@@ -33,6 +43,7 @@ rm -f /root/start-xray-socks5.sh
 rm -f /var/log/xray-socks5-access.log
 rm -f /var/log/xray-socks5-error.log
 rm -f /var/log/xray-socks5.log
+cleanup_shared_xray
 
 echo "SOCKS5 节点已卸载。"
 echo "已删除以下文件："
