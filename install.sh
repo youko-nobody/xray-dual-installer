@@ -59,21 +59,50 @@ ensure_script() {
   fi
 }
 
-node_flag() {
-  [ -f "$1" ] && printf '%s' "已保存" || printf '%s' "未保存"
+node_is_saved() {
+  [ -s "$1" ]
+}
+
+print_overview_row() {
+  LABEL="$1"
+  PADDING="$2"
+  NODE_FILE="$3"
+  if node_is_saved "$NODE_FILE"; then
+    LABEL_COLOR="$BOLD$GREEN"
+    STATUS_COLOR="$BOLD$GREEN"
+    STATUS_TEXT="已保存"
+  else
+    LABEL_COLOR="$CYAN"
+    STATUS_COLOR="$YELLOW"
+    STATUS_TEXT="未保存"
+  fi
+  printf '%b%s%*s%b：%b%s%b\n' \
+    "$LABEL_COLOR" "$LABEL" "$PADDING" "" "$RESET" \
+    "$STATUS_COLOR" "$STATUS_TEXT" "$RESET"
+}
+
+print_info_menu_item() {
+  ITEM_NUMBER="$1"
+  ITEM_LABEL="$2"
+  NODE_FILE="$3"
+  if node_is_saved "$NODE_FILE"; then
+    printf '%b%s. %s（已保存）%b\n' "$BOLD$GREEN" "$ITEM_NUMBER" "$ITEM_LABEL" "$RESET"
+  else
+    printf '%b%s.%b %s\n' "$GREEN" "$ITEM_NUMBER" "$RESET" "$ITEM_LABEL"
+  fi
 }
 
 show_saved_overview() {
   headline "===== 已保存节点总览 ====="
   echo
-  printf '%bReality%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/reality-node-info.txt")"
-  printf '%b双节点%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/node-info.txt")"
-  printf '%bHY2%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/hysteria/node-info.txt")"
-  printf '%bSnell v6%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/snell/node-info.txt")"
-  printf '%bSOCKS5%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/socks5-node-info.txt")"
-  printf '%bMTProto%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/mtproto-proxy/node-info.txt")"
-  printf '%bAnyTLS%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/sing-box-anytls/node-info.txt")"
-  printf '%bSS2022%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/sing-box-ss2022/node-info.txt")"
+  print_overview_row "Reality" 2 "/usr/local/etc/xray/reality-node-info.txt"
+  print_overview_row "双节点" 3 "/usr/local/etc/xray/node-info.txt"
+  print_overview_row "HY2" 6 "/etc/hysteria/node-info.txt"
+  print_overview_row "Snell v6" 1 "/etc/snell/node-info.txt"
+  print_overview_row "SOCKS5" 3 "/usr/local/etc/xray/socks5-node-info.txt"
+  print_overview_row "MTProto" 2 "/etc/mtproto-proxy/node-info.txt"
+  print_overview_row "AnyTLS" 3 "/etc/sing-box-anytls/node-info.txt"
+  print_overview_row "SS2022" 3 "/etc/sing-box-ss2022/node-info.txt"
   echo
 }
 
@@ -112,14 +141,14 @@ show_info_menu() {
   headline "===== 查看节点信息 ====="
   show_saved_overview
   echo
-  printf '%b1.%b 查看单 Reality 节点\n' "$GREEN" "$RESET"
-  printf '%b2.%b 查看 Xray 双节点\n' "$GREEN" "$RESET"
-  printf '%b3.%b 查看 HY2 节点\n' "$GREEN" "$RESET"
-  printf '%b4.%b 查看 Snell v6 节点\n' "$GREEN" "$RESET"
-  printf '%b5.%b 查看 SOCKS5 节点\n' "$GREEN" "$RESET"
-  printf '%b6.%b 查看 MTProto 节点\n' "$GREEN" "$RESET"
-  printf '%b7.%b 查看 AnyTLS 节点\n' "$GREEN" "$RESET"
-  printf '%b8.%b 查看 SS2022 节点\n' "$GREEN" "$RESET"
+  print_info_menu_item 1 "查看单 Reality 节点" "/usr/local/etc/xray/reality-node-info.txt"
+  print_info_menu_item 2 "查看 Xray 双节点" "/usr/local/etc/xray/node-info.txt"
+  print_info_menu_item 3 "查看 HY2 节点" "/etc/hysteria/node-info.txt"
+  print_info_menu_item 4 "查看 Snell v6 节点" "/etc/snell/node-info.txt"
+  print_info_menu_item 5 "查看 SOCKS5 节点" "/usr/local/etc/xray/socks5-node-info.txt"
+  print_info_menu_item 6 "查看 MTProto 节点" "/etc/mtproto-proxy/node-info.txt"
+  print_info_menu_item 7 "查看 AnyTLS 节点" "/etc/sing-box-anytls/node-info.txt"
+  print_info_menu_item 8 "查看 SS2022 节点" "/etc/sing-box-ss2022/node-info.txt"
   printf '%b9.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
   printf '%b0.%b 返回\n' "$YELLOW" "$RESET"
   echo
@@ -147,7 +176,7 @@ show_info_menu() {
         "/etc/sing-box-anytls/node-info.txt" \
         "/etc/sing-box-ss2022/node-info.txt"
       do
-        [ -f "$file" ] && cat "$file" && echo
+        [ -s "$file" ] && cat "$file" && echo
       done
       ;;
     ""|0) return ;;
