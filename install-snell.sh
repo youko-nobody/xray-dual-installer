@@ -179,7 +179,7 @@ show_saved_node_info() {
     '
       /^===== .* =====$/ { print bold blue $0 reset; next }
       /^(公网 IP|端口|PSK|版本|模式|配置片段|配置文件|节点信息文件|查看节点信息|查看服务状态|查看监听端口)：/ { print cyan $0 reset; next }
-      /^snell = / { print yellow $0 reset; next }
+      /^Snell-v6 = snell, / { print yellow $0 reset; next }
       /^\[Proxy\]$/ { print bold green $0 reset; next }
       /^\/.*$/ { print green $0 reset; next }
       { print }
@@ -334,7 +334,7 @@ show_final_summary() {
   printf '%b%s%b\n' "$GREEN" "$MODE" "$RESET"
   echo
   printf '%b%s%b\n' "$BOLD$BLUE" "[Proxy]" "$RESET"
-  printf '%b%s%b\n' "$YELLOW" "snell = $PUBLIC_IP, $PORT, psk=$PSK, version=6, reuse=true" "$RESET"
+  printf '%b%s%b\n' "$YELLOW" "Snell-v6 = snell, $PUBLIC_IP, $PORT, psk=$PSK, version=6, reuse=true, mode=$MODE" "$RESET"
   echo
   printf '%b%s%b\n' "$CYAN" "节点信息文件：" "$RESET"
   printf '%b%s%b\n' "$GREEN" "$NODE_INFO_FILE" "$RESET"
@@ -357,7 +357,7 @@ PSK：$PSK
 
 配置片段：
 [Proxy]
-snell = $PUBLIC_IP, $PORT, psk=$PSK, version=6, reuse=true
+Snell-v6 = snell, $PUBLIC_IP, $PORT, psk=$PSK, version=6, reuse=true, mode=$MODE
 
 说明：Snell 主要用于 Surge，其他常见代理客户端通常不支持。
 
