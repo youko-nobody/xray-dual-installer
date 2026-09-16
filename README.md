@@ -1,4 +1,4 @@
-# Xray / HY2 / Snell / SOCKS5 / MTProto / AnyTLS 一键脚本
+# Xray / HY2 / Snell / SOCKS5 / MTProto / AnyTLS / SS2022 一键脚本
 
 ![Shell](https://img.shields.io/badge/Shell-sh-4EAA25?style=for-the-badge)
 ![System](https://img.shields.io/badge/System-Debian%20%7C%20Ubuntu%20%7C%20Alpine-2563eb?style=for-the-badge)
@@ -15,6 +15,7 @@
 - `SOCKS5`
 - `MTProto`
 - `AnyTLS`
+- `Shadowsocks 2022 / SS2022`
 
 脚本会自动安装依赖、自动获取公网 IP、自动写入服务自启，并把节点信息保存到 VPS 本机，后续可以随时用 `info` 查看。
 
@@ -48,8 +49,9 @@ curl -L -o /root/install.sh https://raw.githubusercontent.com/youko-nobody/xray-
 5. SOCKS5 节点
 6. MTProto 节点
 7. AnyTLS 节点
-8. 查看已保存的节点信息
-9. 卸载节点
+8. Shadowsocks 2022 节点
+9. 查看已保存的节点信息
+10. 卸载节点
 ```
 
 也支持直接指定类型：
@@ -62,6 +64,7 @@ curl -L -o /root/install.sh https://raw.githubusercontent.com/youko-nobody/xray-
 /root/install.sh socks5
 /root/install.sh mtproto
 /root/install.sh anytls
+/root/install.sh ss2022
 /root/install.sh info
 /root/install.sh uninstall
 ```
@@ -110,6 +113,12 @@ wget -O /root/install-mtproto.sh https://raw.githubusercontent.com/youko-nobody/
 wget -O /root/install-anytls.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-anytls.sh && chmod +x /root/install-anytls.sh && /root/install-anytls.sh
 ```
 
+### 8. Shadowsocks 2022 / SS2022
+
+```sh
+wget -O /root/install-ss2022.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/install-ss2022.sh && chmod +x /root/install-ss2022.sh && /root/install-ss2022.sh
+```
+
 ## 协议说明
 
 | 类型 | 完整名称 | 传输 | 说明 |
@@ -121,13 +130,14 @@ wget -O /root/install-anytls.sh https://raw.githubusercontent.com/youko-nobody/x
 | SOCKS5 | `SOCKS5 Username/Password` | TCP + UDP | 通用性高，脚本会输出原始链接和 Telegram 识别链接 |
 | MTProto | `Telegram MTProto Proxy` | TCP | 主要用于 Telegram |
 | AnyTLS | `AnyTLS over TLS` | TCP，支持 UDP over TCP | 使用独立 sing-box 服务，不依赖 Xray-core |
+| SS2022 | `Shadowsocks 2022` | TCP + UDP | 使用独立 sing-box 服务和固定长度 Base64 密钥 |
 
 > [!IMPORTANT]
-> Xray-core 当前不支持 AnyTLS。本项目通过独立的 `sing-box-anytls` 服务部署 AnyTLS，因此它可以与现有 Xray 节点共存。
+> Xray-core 当前不支持 AnyTLS。本项目通过独立的 `sing-box-anytls` 服务部署 AnyTLS；SS2022 使用另一个独立的 `sing-box-ss2022` 服务，因此二者可以与现有 Xray 节点共存。
 
 ## 独立部署说明
 
-现在 `Reality`、`SOCKS5` 和 `AnyTLS` 都使用独立服务，可以在同一台机器上同时存在，不会互相覆盖。
+现在 `Reality`、`SOCKS5`、`AnyTLS` 和 `SS2022` 都使用独立服务，可以在同一台机器上同时存在，不会互相覆盖。
 
 对应关系如下：
 
@@ -136,6 +146,7 @@ wget -O /root/install-anytls.sh https://raw.githubusercontent.com/youko-nobody/x
 | Reality | `xray-reality` | `/usr/local/etc/xray/reality-config.json` |
 | SOCKS5 | `xray-socks5` | `/usr/local/etc/xray/socks5-config.json` |
 | AnyTLS | `sing-box-anytls` | `/etc/sing-box-anytls/config.json` |
+| SS2022 | `sing-box-ss2022` | `/etc/sing-box-ss2022/config.json` |
 
 也就是说，你可以一台机器同时跑：
 
@@ -145,6 +156,7 @@ wget -O /root/install-anytls.sh https://raw.githubusercontent.com/youko-nobody/x
 - `Snell`
 - `MTProto`
 - `AnyTLS`
+- `SS2022`
 
 其中只有 `VLESS + Reality + VLESS + WS` 双节点脚本，仍然是它自己单独占用一套 Xray 配置。
 
@@ -178,6 +190,7 @@ wget -O /root/install-anytls.sh https://raw.githubusercontent.com/youko-nobody/x
 /root/install-socks5.sh info
 /root/install-mtproto.sh info
 /root/install-anytls.sh info
+/root/install-ss2022.sh info
 ```
 
 ## 节点信息保存位置
@@ -191,6 +204,7 @@ wget -O /root/install-anytls.sh https://raw.githubusercontent.com/youko-nobody/x
 | SOCKS5 | `/usr/local/etc/xray/socks5-node-info.txt` |
 | MTProto | `/etc/mtproto-proxy/node-info.txt` |
 | AnyTLS | `/etc/sing-box-anytls/node-info.txt` |
+| SS2022 | `/etc/sing-box-ss2022/node-info.txt` |
 
 ## 卸载命令
 
@@ -210,6 +224,7 @@ wget -O /root/uninstall-snell.sh https://raw.githubusercontent.com/youko-nobody/
 wget -O /root/uninstall-socks5.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-socks5.sh && chmod +x /root/uninstall-socks5.sh && /root/uninstall-socks5.sh
 wget -O /root/uninstall-mtproto.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-mtproto.sh && chmod +x /root/uninstall-mtproto.sh && /root/uninstall-mtproto.sh
 wget -O /root/uninstall-anytls.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-anytls.sh && chmod +x /root/uninstall-anytls.sh && /root/uninstall-anytls.sh
+wget -O /root/uninstall-ss2022.sh https://raw.githubusercontent.com/youko-nobody/xray-dual-installer/main/uninstall-ss2022.sh && chmod +x /root/uninstall-ss2022.sh && /root/uninstall-ss2022.sh
 ```
 
 ## 默认配置
@@ -271,6 +286,16 @@ wget -O /root/uninstall-anytls.sh https://raw.githubusercontent.com/youko-nobody
 | 内核 | 最新稳定版 `sing-box`，最低要求 `1.14` |
 | 证书 | 自动 ACME、已有证书或自签证书 |
 
+### Shadowsocks 2022 / SS2022
+
+| 项目 | 默认值 |
+| --- | --- |
+| 端口 | `20000–39999` 随机空闲高位端口，可手动输入 |
+| 加密方式 | `2022-blake3-aes-128-gcm` |
+| 密钥 | 自动生成 16 或 32 字节随机值并进行 Base64 编码 |
+| 传输 | TCP + UDP 使用相同端口 |
+| 内核 | 最新稳定版 `sing-box`，最低要求 `1.12` |
+
 ## MTProto 说明
 
 当前脚本使用 Telegram 官方 [MTProxy](https://github.com/TelegramMessenger/MTProxy) 源码构建。
@@ -313,6 +338,29 @@ https://t.me/proxy?server=你的IP&port=端口&secret=你的Secret
 anytls://密码@服务器地址:端口/?sni=域名#节点名称
 ```
 
+## SS2022 加密方式与客户端说明
+
+安装时可以选择：
+
+1. `2022-blake3-aes-128-gcm`：默认，使用 16 字节 Base64 密钥，兼容性最好。
+2. `2022-blake3-aes-256-gcm`：使用 32 字节 Base64 密钥。
+3. `2022-blake3-chacha20-poly1305`：使用 32 字节 Base64 密钥，Surge 不支持。
+
+SS2022 密钥不是普通密码，脚本会生成随机密钥并验证 Base64 解码后的长度。节点信息会保存标准 SIP002 分享链接：
+
+```text
+ss://Base64URL(加密方式:密钥)@服务器地址:端口#节点名称
+```
+
+对于 Surge，脚本会在 AES-128 和 AES-256 模式下额外输出：
+
+```ini
+[Proxy]
+SS2022-端口 = ss, 服务器地址, 端口, encrypt-method=2022-blake3-aes-128-gcm, password=Base64密钥, udp-relay=true
+```
+
+使用前请确认客户端支持所选 SS2022 加密方式。旧版 Shadowsocks 客户端即使支持传统 AEAD，也不一定支持 Shadowsocks 2022。
+
 ## 端口放行建议
 
 安装后请确认云厂商安全组和系统防火墙都已放行对应端口：
@@ -324,6 +372,7 @@ anytls://密码@服务器地址:端口/?sni=域名#节点名称
 - `SOCKS5`：TCP
 - `MTProto`：TCP
 - `AnyTLS`：TCP；自动 ACME 模式还需要 TCP 80
+- `SS2022`：TCP + UDP，二者使用同一个端口
 
 ## 常用命令
 
@@ -364,6 +413,14 @@ ss -tnlp | grep mtproto
 ss -tnlp | grep sing-box-anytls
 ```
 
+### 检查 SS2022 配置和监听
+
+```sh
+/usr/local/bin/sing-box-ss2022 check -c /etc/sing-box-ss2022/config.json
+ss -lntp | grep sing-box-ss2022
+ss -lnup | grep sing-box-ss2022
+```
+
 ## 服务管理
 
 ### Debian / Ubuntu
@@ -374,6 +431,7 @@ systemctl status hysteria-server.service --no-pager -l
 systemctl status snell --no-pager -l
 systemctl status mtproxy --no-pager -l
 systemctl status sing-box-anytls --no-pager -l
+systemctl status sing-box-ss2022 --no-pager -l
 ```
 
 ### Alpine
@@ -384,6 +442,7 @@ rc-service hysteria status
 rc-service snell status
 rc-service mtproxy status
 rc-service sing-box-anytls status
+rc-service sing-box-ss2022 status
 ```
 
 ## 相关文件
@@ -396,6 +455,8 @@ rc-service sing-box-anytls status
 | `/etc/mtproto-proxy` | MTProto 配置目录 |
 | `/etc/sing-box-anytls/config.json` | AnyTLS 配置 |
 | `/etc/sing-box-anytls/node-info.txt` | AnyTLS 节点信息 |
+| `/etc/sing-box-ss2022/config.json` | SS2022 配置 |
+| `/etc/sing-box-ss2022/node-info.txt` | SS2022 节点信息 |
 | `/root/install.sh` | 综合脚本 |
 
 ## 常见问题
@@ -446,7 +507,7 @@ apk add curl wget
 ## 使用提醒
 
 > [!WARNING]
-> 请不要把 UUID、Reality 公钥、HY2 密码、Snell PSK、SOCKS5 用户名密码、MTProto Secret、AnyTLS 密码这类敏感信息公开发到截图、Issue 或聊天记录里。
+> 请不要把 UUID、Reality 公钥、HY2 密码、Snell PSK、SOCKS5 用户名密码、MTProto Secret、AnyTLS 密码、SS2022 密钥这类敏感信息公开发到截图、Issue 或聊天记录里。
 
 - 本项目仅供学习、测试和自用
 - 使用前请确认符合当地法律法规

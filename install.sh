@@ -73,6 +73,7 @@ show_saved_overview() {
   printf '%bSOCKS5%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/usr/local/etc/xray/socks5-node-info.txt")"
   printf '%bMTProto%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/mtproto-proxy/node-info.txt")"
   printf '%bAnyTLS%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/sing-box-anytls/node-info.txt")"
+  printf '%bSS2022%b：%s\n' "$CYAN" "$RESET" "$(node_flag "/etc/sing-box-ss2022/node-info.txt")"
   echo
 }
 
@@ -99,11 +100,12 @@ show_menu() {
   printf '%b5.%b SOCKS5 节点\n' "$GREEN" "$RESET"
   printf '%b6.%b MTProto 节点\n' "$GREEN" "$RESET"
   printf '%b7.%b AnyTLS 节点\n' "$GREEN" "$RESET"
-  printf '%b8.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
-  printf '%b9.%b 卸载节点\n' "$YELLOW" "$RESET"
+  printf '%b8.%b Shadowsocks 2022 节点\n' "$GREEN" "$RESET"
+  printf '%b9.%b 查看已保存的节点信息\n' "$CYAN" "$RESET"
+  printf '%b10.%b 卸载节点\n' "$YELLOW" "$RESET"
   printf '%b0.%b 退出\n' "$RED" "$RESET"
   echo
-  warn "提示：Reality、SOCKS5 与 AnyTLS 可独立共存；双节点仍会占用自己的 Xray 配置。"
+  warn "提示：Reality、SOCKS5、AnyTLS 与 SS2022 可独立共存；双节点仍会占用自己的 Xray 配置。"
 }
 
 show_info_menu() {
@@ -117,7 +119,8 @@ show_info_menu() {
   printf '%b5.%b 查看 SOCKS5 节点\n' "$GREEN" "$RESET"
   printf '%b6.%b 查看 MTProto 节点\n' "$GREEN" "$RESET"
   printf '%b7.%b 查看 AnyTLS 节点\n' "$GREEN" "$RESET"
-  printf '%b8.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
+  printf '%b8.%b 查看 SS2022 节点\n' "$GREEN" "$RESET"
+  printf '%b9.%b 查看全部已保存节点内容\n' "$CYAN" "$RESET"
   printf '%b0.%b 返回\n' "$YELLOW" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -130,7 +133,8 @@ show_info_menu() {
     5) ensure_script "install-socks5.sh" "/root/install-socks5.sh"; /root/install-socks5.sh info ;;
     6) ensure_script "install-mtproto.sh" "/root/install-mtproto.sh"; /root/install-mtproto.sh info ;;
     7) ensure_script "install-anytls.sh" "/root/install-anytls.sh"; /root/install-anytls.sh info ;;
-    8)
+    8) ensure_script "install-ss2022.sh" "/root/install-ss2022.sh"; /root/install-ss2022.sh info ;;
+    9)
       show_saved_overview
       echo
       for file in \
@@ -140,7 +144,8 @@ show_info_menu() {
         "/etc/snell/node-info.txt" \
         "/usr/local/etc/xray/socks5-node-info.txt" \
         "/etc/mtproto-proxy/node-info.txt" \
-        "/etc/sing-box-anytls/node-info.txt"
+        "/etc/sing-box-anytls/node-info.txt" \
+        "/etc/sing-box-ss2022/node-info.txt"
       do
         [ -f "$file" ] && cat "$file" && echo
       done
@@ -160,7 +165,8 @@ show_uninstall_menu() {
   printf '%b5.%b 卸载 SOCKS5 节点\n' "$YELLOW" "$RESET"
   printf '%b6.%b 卸载 MTProto 节点\n' "$YELLOW" "$RESET"
   printf '%b7.%b 卸载 AnyTLS 节点\n' "$YELLOW" "$RESET"
-  printf '%b8.%b 卸载 Xray + HY2 + Snell + SOCKS5 + MTProto + AnyTLS 全部节点\n' "$RED" "$RESET"
+  printf '%b8.%b 卸载 SS2022 节点\n' "$YELLOW" "$RESET"
+  printf '%b9.%b 卸载 Xray + HY2 + Snell + SOCKS5 + MTProto + AnyTLS + SS2022 全部节点\n' "$RED" "$RESET"
   printf '%b0.%b 返回\n' "$CYAN" "$RESET"
   echo
   printf '请选择 [默认: 0]: '
@@ -173,8 +179,9 @@ show_uninstall_menu() {
     5) run_remote_script "uninstall-socks5.sh" "/root/uninstall-socks5.sh" ;;
     6) run_remote_script "uninstall-mtproto.sh" "/root/uninstall-mtproto.sh" ;;
     7) run_remote_script "uninstall-anytls.sh" "/root/uninstall-anytls.sh" ;;
-    8)
-      warn "即将卸载 Xray、HY2、Snell、SOCKS5、MTProto、AnyTLS 相关节点。"
+    8) run_remote_script "uninstall-ss2022.sh" "/root/uninstall-ss2022.sh" ;;
+    9)
+      warn "即将卸载 Xray、HY2、Snell、SOCKS5、MTProto、AnyTLS、SS2022 相关节点。"
       printf '确认卸载全部？输入 yes 继续: '
       read -r CONFIRM || CONFIRM=""
       if [ "$CONFIRM" = "yes" ]; then
@@ -184,6 +191,7 @@ show_uninstall_menu() {
         run_remote_script "uninstall-socks5.sh" "/root/uninstall-socks5.sh"
         run_remote_script "uninstall-mtproto.sh" "/root/uninstall-mtproto.sh"
         run_remote_script "uninstall-anytls.sh" "/root/uninstall-anytls.sh"
+        run_remote_script "uninstall-ss2022.sh" "/root/uninstall-ss2022.sh"
       else
         warn "已取消卸载。"
       fi
@@ -203,6 +211,7 @@ main() {
     socks5) run_remote_script "install-socks5.sh" "/root/install-socks5.sh" install; exit 0 ;;
     mtproto) run_remote_script "install-mtproto.sh" "/root/install-mtproto.sh" install; exit 0 ;;
     anytls) run_remote_script "install-anytls.sh" "/root/install-anytls.sh" install; exit 0 ;;
+    ss2022) run_remote_script "install-ss2022.sh" "/root/install-ss2022.sh" install; exit 0 ;;
     info) show_info_menu; exit 0 ;;
     uninstall) show_uninstall_menu; exit 0 ;;
     ""|menu) ;;
@@ -216,6 +225,7 @@ main() {
       printf '%s\n' "  $0 socks5      直接部署 SOCKS5"
       printf '%s\n' "  $0 mtproto     直接部署 MTProto"
       printf '%s\n' "  $0 anytls      直接部署 AnyTLS"
+      printf '%s\n' "  $0 ss2022      直接部署 Shadowsocks 2022"
       printf '%s\n' "  $0 info        查看节点信息菜单"
       printf '%s\n' "  $0 uninstall   卸载菜单"
       exit 1
@@ -234,8 +244,9 @@ main() {
       5) run_remote_script "install-socks5.sh" "/root/install-socks5.sh" install; pause_hint; exit 0 ;;
       6) run_remote_script "install-mtproto.sh" "/root/install-mtproto.sh" install; pause_hint; exit 0 ;;
       7) run_remote_script "install-anytls.sh" "/root/install-anytls.sh" install; pause_hint; exit 0 ;;
-      8) show_info_menu ;;
-      9) show_uninstall_menu ;;
+      8) run_remote_script "install-ss2022.sh" "/root/install-ss2022.sh" install; pause_hint; exit 0 ;;
+      9) show_info_menu ;;
+      10) show_uninstall_menu ;;
       0) success "已退出。"; exit 0 ;;
       *) error "无效选择，请重新输入。" ;;
     esac
